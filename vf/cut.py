@@ -8,6 +8,7 @@ series.yaml:
 episode.yaml:
   episode: {no: 2, title: The Visitor}    -> label "EPISODE 2: THE VISITOR"  (or episode: {label: "..."})
   release: {wrap: false}                  -> no intro/outro (a teaser/trailer): build, check, phone copy only
+  release: {intro_after: <shot id>}       -> cold open: the series intro plays after that shot, not first
 
 Steps (each build is cache-backed: an unchanged intro/outro re-renders in ~20 s):
   1. writes <ep>/intro/episode.yaml (the series intro with the label filled in) and builds it
@@ -97,6 +98,20 @@ def cut(episode_yaml, skip_build=False, no_check=False, phone_mb=28.0, log=print
         main = newest(root)
         outro = newest(os.path.join(sdir, os.path.dirname(se['outro']))) if se.get('outro') else None
     parts = [p for p in parts if p] + [main] + ([outro] if outro else [])
+    # cold open: release: {intro_after: <shot id>} plays the episode up to the end of that shot, then the series intro,
+    # then the rest of the episode. A part is a path or (path, input options).
+    after = (ep.get('release') or {}).get('intro_after')
+    if after and se.get('intro') and len(parts) >= 2:
+        import json
+        tl = json.load(open(os.path.join(root, 'out', 'timeline.json'), encoding='utf-8'))
+        hit = [s for s in tl if s['id'] == after]
+        if not hit:
+            raise SystemExit(f'release.intro_after: no shot {after!r} in the timeline')
+        t = round(hit[0]['start'] + hit[0]['dur'], 3)
+        intro_part = parts.pop(0)
+        i = parts.index(main)
+        parts[i:i + 1] = [(main, ['-t', str(t)]), intro_part, (main, ['-ss', str(t)])]
+        log(f'=== cold open: intro after {after} at {t:.2f} s')
     ok = True
     if not no_check:
         log('=== check')
@@ -110,7 +125,8 @@ def cut(episode_yaml, skip_build=False, no_check=False, phone_mb=28.0, log=print
     fc = ';'.join(f'[{i}:v]fps=60,format=yuv420p[v{i}]' for i in range(n)) + ';' + \
          ''.join(f'[v{i}][{i}:a]' for i in range(n)) + f'concat=n={n}:v=1:a=1[v][a]'
     log(f'=== join {n} part(s) -> {full}')
-    subprocess.run(['ffmpeg', '-v', 'error', '-y'] + sum([['-i', p] for p in parts], []) +
+    inputs = sum([(list(p[1]) + ['-i', p[0]]) if isinstance(p, tuple) else ['-i', p] for p in parts], [])
+    subprocess.run(['ffmpeg', '-v', 'error', '-y'] + inputs +
                    ['-filter_complex', fc, '-map', '[v]', '-map', '[a]'] + enc.join() + [
                     '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', full], check=True)
     dur = _dur(full)
