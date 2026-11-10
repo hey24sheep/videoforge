@@ -1,0 +1,61 @@
+# Generated and heavy: never committed. Renders, caches and model weights live on the GPU machine.
+cache/
+jobs/
+out/
+qa/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+**/out/
+**/.vfcache/
+**/_trash/
+**/proof/
+
+# media and model files (regenerate or keep locally)
+*.mp4
+*.mov
+*.mkv
+*.wav
+*.m4a
+*.mp3
+*.flac
+*.pkl
+*.npy
+*.npz
+*.pt
+*.pth
+*.safetensors
+*.gguf
+*.onnx
+*.bin
+*.zip
+*.whl
+*.log
+*.part
+*.part.png
+
+
+# local-only Claude settings
+.claude/settings.local.json
+
+# vendored pip install (pip install --target .pydeps gguf==0.19.0)
+.pydeps/
+
+# demo series media: small, needed to verify an install without AI models
+!series/demo/assets/
+!series/demo/assets/*
+
+# README hero media (showreel GIF + small mp4)
+!docs/media/
+!docs/media/*
+
+# private series live in their own repos (clone or junction them into series/); only the examples are public
+series/*
+!series/demo/
+!series/showreel/
+
+# local-only files: working state, private rules, private styles
+STATE.md
+CLAUDE.local.md
+styles/local/

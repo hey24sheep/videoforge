@@ -1,0 +1,23 @@
+# videoforge showreel: a generic 15 s 16:9 sample for the README hero. Not a series; no cast, no voices.
+name: Showreel
+style: realistic
+fps: 60
+look:
+  bloom: 0.4
+  vignette: 0.32
+  grain: 0.02
+  shadows: '#0a2238'
+  highlights: '#ffc98e'
+  split: 0.22
+  saturation: 0.92
+fonts:
+  title: bahnschrift.ttf
+  caption: segoeuib.ttf
+  body: segoeui.ttf
+captions: {yt: subtitle, short: shorts}
+voices: {}
+cast_lock: false
+qa_style_note: >-
+  photoreal 16:9 science-fiction film footage, Hollywood blockbuster look: cold blue shadows and warm gold highlights,
+  vast scale, slow camera moves, light film grain; a small "hey24sheep.com/videoforge" watermark sits in the
+  bottom-right corner of every shot on purpose; the last shot is a title card on black.

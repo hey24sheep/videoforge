@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "videoforge"
+version = "1.2.1"
+description = "Cached local GPU pipeline for AI series episodes (YouTube 16:9 / Shorts 9:16): script -> voices -> keyframes -> clips -> checks -> release cut"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.11"
+dependencies = ["numpy", "scipy", "pillow", "pyyaml", "opencv-python-headless", "cupy-cuda12x"]
+
+[project.optional-dependencies]
+mcp = ["mcp>=2.3"]
+
+[project.scripts]
+vf = "vf.build:main"
+vf-mcp = "vf.mcp_server:main"
+
+[tool.setuptools]
+packages = ["vf", "vf.gen"]

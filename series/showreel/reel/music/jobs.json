@@ -1,0 +1,56 @@
+[
+{
+"prompt": "epic cinematic space film score, warm sustained church pipe organ chords, slow steady ticking clock pulse, soaring strings slowly swelling, deep sub bass, awe and wonder, vast and emotional, building to a huge final organ chord, instrumental, no vocals",
+"dur": 17,
+"out": "series/showreel/reel/music/m_s11.wav",
+"seed": 11,
+"bpm": 72,
+"keyscale": "A minor",
+"timesignature": "4"
+},
+{
+"prompt": "epic cinematic space film score, warm sustained church pipe organ chords, slow steady ticking clock pulse, soaring strings slowly swelling, deep sub bass, awe and wonder, vast and emotional, building to a huge final organ chord, instrumental, no vocals",
+"dur": 17,
+"out": "series/showreel/reel/music/m_s23.wav",
+"seed": 23,
+"bpm": 72,
+"keyscale": "A minor",
+"timesignature": "4"
+},
+{
+"prompt": "epic cinematic space film score, warm sustained church pipe organ chords, slow steady ticking clock pulse, soaring strings slowly swelling, deep sub bass, awe and wonder, vast and emotional, building to a huge final organ chord, instrumental, no vocals",
+"dur": 17,
+"out": "series/showreel/reel/music/m_s37.wav",
+"seed": 37,
+"bpm": 72,
+"keyscale": "A minor",
+"timesignature": "4"
+},
+{
+"prompt": "majestic ambient sci-fi film score, deep pipe organ drone with rising arpeggios, soft piano notes, slow heartbeat pulse, huge string crescendo, cinematic, hopeful and vast, ending on a massive sustained chord, instrumental, no vocals",
+"dur": 17,
+"out": "series/showreel/reel/music/m_s53.wav",
+"seed": 53,
+"bpm": 72,
+"keyscale": "A minor",
+"timesignature": "4"
+},
+{
+"prompt": "majestic ambient sci-fi film score, deep pipe organ drone with rising arpeggios, soft piano notes, slow heartbeat pulse, huge string crescendo, cinematic, hopeful and vast, ending on a massive sustained chord, instrumental, no vocals",
+"dur": 17,
+"out": "series/showreel/reel/music/m_s71.wav",
+"seed": 71,
+"bpm": 72,
+"keyscale": "A minor",
+"timesignature": "4"
+},
+{
+"prompt": "majestic ambient sci-fi film score, deep pipe organ drone with rising arpeggios, soft piano notes, slow heartbeat pulse, huge string crescendo, cinematic, hopeful and vast, ending on a massive sustained chord, instrumental, no vocals",
+"dur": 17,
+"out": "series/showreel/reel/music/m_s89.wav",
+"seed": 89,
+"bpm": 72,
+"keyscale": "A minor",
+"timesignature": "4"
+}
+]

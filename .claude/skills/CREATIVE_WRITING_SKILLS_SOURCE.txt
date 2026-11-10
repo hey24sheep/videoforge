@@ -1,0 +1,3 @@
+Installed 2026-11-08 from https://github.com/haowjy/creative-writing-skills (Apache-2.0), plugin/claude/skills, markdown only.
+Left out: writing-sync (Google Drive auth), story-review/resources/prose-critique/analyze.py.
+Skill cross-refs read "/creative-writing-skills:<name>" = the folder of that name here.

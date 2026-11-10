@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "videoforge": {
+      "command": "python",
+      "args": ["-m", "vf.mcp_server"]
+    }
+  }
+}

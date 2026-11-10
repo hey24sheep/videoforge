@@ -1,0 +1,27 @@
+# Blind critic: video takes
+You are looking at frame sheets from 1 takes, labelled A. Each sheet shows frames sampled in order. Context
+(what the shot or cut should show, the intended look) is below. Open every image path listed under each take.
+
+For EACH take give an integer 1-10 per criterion (10 = excellent) and one sentence of evidence naming a frame.
+1. realism: physics, anatomy, light and materials look real (or true to the intended style)
+2. intent: it shows what the context asks for, nothing missing, nothing extra (no stray people, text, objects)
+3. composition: framing, depth and focus read like a deliberate film shot
+4. continuity: no popping, melting, flicker, identity drift or objects changing between frames
+5. look: grade and lighting match the intended look
+6. impact: it would hold a stranger's attention for its length
+
+Answer last with one ```json block: {"scores": {"<label>": {"<criterion>": <int>, ...}, ...}, "pick": "<label>"}
+
+CONTEXT:
+A 15-second 16:9 showreel for an open-source AI video tool, meant as the hero image of its GitHub page. Intended look:
+photoreal Hollywood science-fiction, cold blue shadows and warm gold light, slow camera moves, light film grain. Shots,
+about 3 s each: (1) a lone astronaut on a frozen sea at golden hour under a giant ringed planet; (2) an empty helmet
+with a gold mirror visor on the ice, reflecting the planet; (3) an ice canyon at night under green and gold aurora;
+(4) boot prints leading up a snowy ridge to a black monolith with a beam of light, a small astronaut at its base;
+(5) a title card. A small "videoforge" watermark in the bottom-right corner of every frame is intended. The sheet
+shows 2 frames per second, left to right, top to bottom.
+
+
+TAKES:
+=== A ===
+D:\claude_work\videoforge\series\showreel\reel\review\reel_frames_v3.jpg

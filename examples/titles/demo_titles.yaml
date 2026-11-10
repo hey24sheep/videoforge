@@ -1,0 +1,27 @@
+# Example title sequence for vf/mograph.py, built from the demo series' plates (no AI, CPU only).
+#   python -m vf.mograph render examples/titles/demo_titles.yaml   -> examples/titles/out/demo_titles.mp4
+# Copy this file for your own series: swap the card images, the titles, the house card and the watermark.
+name: demo_titles
+size: [1080, 1920]          # 9:16; use [1920, 1080] for 16:9
+fps: 60
+dur: 8
+bg: '#060708'
+fog: '#1b2126'
+accent: '#c22f3f'           # colour of the big title line
+grain: 0.045
+vignette: 0.6
+fade_out: 0.6
+lufs: -18
+camera: {z0: 0, z1: 900, sway: 45, roll: 1.5, focal: 1400}
+cards:                      # images float in 3D; x/y/z in px at the focus plane, angles in degrees, spin per second
+- {img: ../../series/demo/assets/plate_city_2001.png, x: -260, y: -480, z: 700, w: 460, rx: 4, ry: 22, rz: -6, spin: [0, -1.5, 0.3]}
+- {img: ../../series/demo/assets/plate_deck_2002.png, x: 300, y: -120, z: 520, w: 480, rx: -6, ry: -18, rz: 5, spin: [0, 1.2, -0.2]}
+- {img: ../../series/demo/assets/plate_dawn_2000.png, x: -300, y: 340, z: 950, w: 480, rx: 8, ry: 26, rz: 3, spin: [0, -1.0, 0.2]}
+- {img: ../../series/demo/assets/plate_dawn_2002.png, x: 320, y: 620, z: 1250, w: 440, rx: -4, ry: -24, rz: -4, spin: [0, 1.4, 0]}
+titles:                     # small white line over a big accent line
+- {small: EPISODE ONE, big: THE SIGNAL, at: 0.4, until: 3.6, y: 0.40}
+- {small: A NEW SERIES, big: COMING SOON, at: 3.9, until: 6.0, y: 0.40}
+house:                      # production-house card
+- {top: A, name: STUDIO, sub: PRODUCTIONS SERIES, at: 6.0, until: 8.0, y: 0.47, size: 0.08}
+watermark: {text: Your Studio, size: 0.02, opacity: 0.55, margin: 0.035}
+music: {src: ../../series/demo/assets/pad.wav, gain_db: 0}

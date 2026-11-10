@@ -1,0 +1,142 @@
+# videoforge style profiles. A series selects one with `style: <key>` in series.yaml; everything here is a
+# default the series/episode can override. Fields:
+#   prompt_prefix / prompt_suffix  wrapped around every KEYFRAME (still image) prompt
+#   motion_prefix / motion_suffix  wrapped around every MOTION (image-to-video) prompt; the default suffix asks for
+#                                  a steady camera: camera moves are made by the compositor (vf/camera.py)
+#   camera                         default virtual camera for every shot (move, amount, handheld, blur, parallax)
+#   negative                       used by models that run with CFG > 1 (4-step distilled video runs at CFG 1:
+#                                  then say it positively in the prompt instead - see director.md)
+#   look                           final grade (vf.gpu.finish): bloom, vignette, grain, split-tone, saturation
+#   motion                         gen_fps = native frames/s of the AI clip; step = hold each drawing N frames
+#                                  ("on twos"); interpolate = smooth to output fps with RIFE (off for stepped styles)
+#   models                         recommended per stage on an 8 GB RTX 4060 (see docs/models.md)
+#   eight_gb_risk                  how forgiving the style is of small-model artifacts (low = safest)
+
+_defaults:
+  models:
+    video: wan22_i2v_a14b_q4_lightx2v     # Wan2.2-I2V-A14B GGUF Q4_K_M + lightx2v 4-step, 480p, then upscale
+    video_preview: fastwan22_ti2v_5b      # 3-step DMD, blocking/timing only
+    keyframe: qwen_image_edit_int4        # first frames + character sheet (consistency), Nunchaku INT4 Lightning
+    tts_dramatic: chatterbox              # voice clone + exaggeration control
+    tts_narration: kokoro                 # fast clean narration
+    music: ace_step
+    upscale: realesr_animevideov3
+  look: {bloom: 0.4, vignette: 0.3, grain: 0.015, split: 0.12, saturation: 1.0}
+  motion: {gen_fps: 16, step: 1, interpolate: true}
+  captions: {yt: subtitle, short: shorts}
+  # AI clip defaults for every shot (user's choice 2026-11-01): 832x480 / 480x832 keeps a 5 s clip at ~47 s.
+  # 576x1024 is sharper but needs >8 GB VRAM on the 4060 (75-130 s/clip); set `gen: {size: [1024, 576]}` per series.
+  gen: {size: [832, 480]}
+  # every shot moves like a film camera (user rule 2026-11-02: no held stills); shots override with `camera:`
+  camera: {move: push_in, amount: 0.05, handheld: 0.15, blur: 1.0, parallax: 0.6}
+  motion_prefix: "cinematic live-action footage, "
+  motion_suffix: ", the camera stays perfectly steady on a tripod, natural physically plausible motion, consistent identity and wardrobe, stable anatomy, lips closed unless speaking"
+
+anime:
+  name: "Anime (Ufotable / high-speed dynamic tracking)"
+  prompt_prefix: "high-end theatrical anime film, Ufotable style digital compositing, clean consistent lineart, cel shading with soft gradient shadows, vivid particle effects, dynamic tracking camera, "
+  prompt_suffix: ", sharp clean lines, consistent character design, stable proportions, smooth sakuga motion"
+  negative: "blurry, deformed hands, extra fingers, melting limbs, flicker, inconsistent outfit, watermark, text, jpeg artifacts, 3d render, photo"
+  look: {bloom: 0.55, vignette: 0.25, grain: 0.01, shadows: '#10203a', highlights: '#ffe2c0', saturation: 1.08}
+  motion: {gen_fps: 16, step: 1, interpolate: true}
+  models: {keyframe: illustrious_or_noobai_sdxl}
+  gen: {upscale: 2}   # realesr-animevideov3 suits cel shading (photographic styles use source sharpening instead)
+  eight_gb_risk: high   # fast combat on detailed characters is where 8 GB models melt limbs
+
+neo_noir:
+  name: "Neo-Noir Cinema (chiaroscuro, wet asphalt)"
+  prompt_prefix: "neo-noir cinema still, hard chiaroscuro key light, deep black shadows, rain-slick asphalt reflections, sodium streetlights, 35mm anamorphic, "
+  # user's positive keyword list (2026-11-03). Keyframes only; motion prompts get them per shot after the A/B sample.
+  prompt_suffix: ", controlled film grain, crisp silhouettes, consistent wardrobe, motivated practical lighting, vertical 9:16 composition, cinematic neo-noir film still, photorealistic, shot on ARRI Alexa with anamorphic lens, 35mm film look, ultra-detailed, sharp focus, natural skin texture with visible pores, realistic anatomy, well-formed hands, natural symmetrical face, consistent character appearance, consistent lighting, fine film grain, Hollywood production quality"
+  # negative is ignored by the CFG-1.0 distilled models (Kandinsky 6 Lite distill, Z-Image Turbo): write avoidance positively
+  negative: "flat lighting, oversaturated, cartoon, deformed face, flicker, watermark, text"
+  look: {bloom: 0.5, vignette: 0.45, grain: 0.03, shadows: '#0a1622', highlights: '#ffd2a0', saturation: 0.7, split: 0.18}
+  motion: {gen_fps: 16, step: 1, interpolate: true}
+  motion_prefix: "neo-noir film footage, low-key practical lighting, "
+  camera: {move: push_in, amount: 0.05, handheld: 0.2, blur: 1.0, parallax: 0.6}
+  eight_gb_risk: medium  # darkness hides detail errors; faces in close-up still need care
+
+comic:
+  name: "Comic Book / Graphic Novel (inked outlines, halftone)"
+  prompt_prefix: "graphic novel panel come to life, bold inked outlines, flat colour fills, halftone dot shading, dramatic foreshortening, speed lines, "
+  prompt_suffix: ", clean vector-like ink edges, stable flat colours, consistent costume, readable silhouettes"
+  negative: "photorealistic, soft gradients, blurry lines, noisy texture, extra limbs, flicker, watermark"
+  look: {bloom: 0.15, vignette: 0.15, grain: 0.0, saturation: 1.15}
+  motion: {gen_fps: 16, step: 2, interpolate: false}   # held drawings read as deliberate comic timing
+  eight_gb_risk: low
+
+realistic:
+  name: "Hyper-Realistic / Cinematic Live Action (physics weight, anamorphic)"
+  prompt_prefix: "cinematic live-action film still, physically based lighting, anamorphic lens, shallow depth of field, real-world physics and weight, natural skin texture, "
+  prompt_suffix: ", consistent wardrobe and face, stable anatomy, motivated camera move, subtle film grain"
+  negative: "cgi, plastic skin, deformed hands, extra fingers, warped face, flicker, oversharpened, watermark, text"
+  look: {bloom: 0.35, vignette: 0.3, grain: 0.022, shadows: '#132430', highlights: '#ffe0c4', saturation: 0.92}
+  motion: {gen_fps: 16, step: 1, interpolate: true}
+  models: {keyframe: z_image_turbo_or_flux2_klein}
+  eight_gb_risk: very_high  # faces and hands are judged hardest; 480p 14B Q4 is the floor
+
+realistic_scenic:   # realistic without people words: landscapes, space, vehicles, objects (a face-free prefix)
+  name: "Hyper-Realistic, scenic (no people unless the prompt names them)"
+  prompt_prefix: "cinematic live-action film still, physically based lighting, anamorphic lens, large-format photography, "
+  prompt_suffix: ", photoreal materials and scale, motivated light, subtle film grain"
+  negative: "cgi, plastic, people, person, face, flicker, oversharpened, watermark, text"
+  look: {bloom: 0.35, vignette: 0.3, grain: 0.022, shadows: '#132430', highlights: '#ffe0c4', saturation: 0.92}
+  motion: {gen_fps: 16, step: 1, interpolate: true}
+  models: {keyframe: z_image_turbo_or_flux2_klein}
+  eight_gb_risk: medium
+
+clay3d:
+  name: "Modern 3D Animation (clay render, soft AO)"
+  prompt_prefix: "high-fidelity stylised 3D animation, soft clay-like materials, gentle ambient occlusion, subsurface scattering, rounded appealing shapes, studio key light, "
+  prompt_suffix: ", consistent character model, smooth surfaces, stable geometry, clean edges"
+  negative: "photo, noisy texture, deformed, melted geometry, flicker, watermark, text"
+  look: {bloom: 0.3, vignette: 0.2, grain: 0.0, saturation: 1.05}
+  motion: {gen_fps: 16, step: 1, interpolate: true}
+  eight_gb_risk: low     # smooth shading has little high-frequency detail to hallucinate
+
+isometric:
+  name: "Isometric / Diorama (45-degree tilt-shift miniature)"
+  prompt_prefix: "isometric miniature diorama, 45 degree fixed overhead view, tilt-shift lens blur at top and bottom, tiny detailed figures, toy-like materials, "
+  prompt_suffix: ", locked camera angle, consistent scale, crisp miniature detail"
+  negative: "perspective distortion, camera roll, extreme close-up, blurry centre, flicker, watermark"
+  look: {bloom: 0.25, vignette: 0.35, grain: 0.0, saturation: 1.12}
+  motion: {gen_fps: 16, step: 1, interpolate: true}
+  eight_gb_risk: low     # small figures + fixed camera = little to break
+
+cyberpunk:
+  name: "Cyberpunk / Neon Synthwave (chromatic aberration, laser trails)"
+  prompt_prefix: "cyberpunk megacity at night, neon magenta and cyan signage, volumetric haze, hard-edge light trails, chrome and wet surfaces, "
+  prompt_suffix: ", crisp neon edges, consistent outfit, clean reflections"
+  negative: "daylight, muddy colours, blurry neon, deformed, flicker, watermark, text"
+  look: {bloom: 0.8, bloom_threshold: 0.75, vignette: 0.35, grain: 0.012, shadows: '#1a0a2a', highlights: '#7ff6ff', saturation: 1.15}
+  motion: {gen_fps: 16, step: 1, interpolate: true}
+  eight_gb_risk: medium
+
+ink_wash:
+  name: "Ink Wash / Traditional Sumi-e (brush strokes, watercolour bleed)"
+  prompt_prefix: "traditional sumi-e ink wash painting in motion, expressive calligraphic brush strokes, watercolour bleed on rice paper, negative space, monochrome ink with a single accent colour, "
+  prompt_suffix: ", fluid ink motion, consistent figure silhouette, paper texture"
+  negative: "photorealistic, 3d, saturated colours, digital noise, flicker, watermark, text"
+  look: {bloom: 0.2, vignette: 0.25, grain: 0.02, saturation: 0.6}
+  motion: {gen_fps: 16, step: 1, interpolate: true}
+  eight_gb_risk: very_low  # bleed and abstraction absorb small-model errors
+
+papercraft:
+  name: "2.5D Papercraft Diorama / Stop-Motion (layered paper cutouts, crisp shadow depth)"
+  prompt_prefix: "handcrafted 2.5D papercraft stop-motion diorama, layered cut paper planes, visible paper fibre and fold creases, crisp cast shadows between layers, practical miniature lighting, rigid paper figures with hinged joints, "
+  prompt_suffix: ", clean razor-cut paper edges, rigid non-deforming paper limbs, consistent colour cardstock, stable layer depth, stop-motion timing"
+  negative: "melting, rubbery limbs, smooth cgi, photoreal skin, motion smear, noise, flicker, watermark, text"
+  look: {bloom: 0.25, vignette: 0.3, grain: 0.01, shadows: '#1b1410', highlights: '#ffe6c8', saturation: 1.0}
+  motion: {gen_fps: 16, step: 2, interpolate: false}   # 8 drawings/s held on twos = authentic stop-motion
+  camera: {move: drift, amount: 0.04, handheld: 0.05, blur: 0.3, parallax: 0.8}   # miniature rig: layered depth
+  eight_gb_risk: very_low
+
+pixel:
+  name: "Retrowave Pixel Art (hi-fi pixel grid, zero-blur combat)"
+  prompt_prefix: "high-fidelity 16-bit pixel art animation, strict pixel grid, limited palette, crisp sprite outlines, parallax backgrounds, retrowave sunset palette, "
+  prompt_suffix: ", no anti-aliasing blur, consistent sprite design, clean pixel edges"
+  negative: "blurry, smooth gradients, photoreal, 3d, jpeg artifacts, flicker, watermark"
+  look: {bloom: 0.2, vignette: 0.1, grain: 0.0, saturation: 1.1, tonemap: none}
+  motion: {gen_fps: 16, step: 2, interpolate: false, pixel_snap: 4}   # post: nearest-neighbour snap to grid
+  camera: {move: drift, amount: 0.04, handheld: 0, blur: 0, parallax: 0}   # no smear on a pixel grid
+  eight_gb_risk: low

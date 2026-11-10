@@ -1,0 +1,19 @@
+# Series-wide settings: every episode in this folder inherits these.
+name: Demo
+fps: 60
+look:            # final grade (see README: Look)
+  bloom: 0.45
+  vignette: 0.3
+  grain: 0.015
+  shadows: '#0e2233'
+  highlights: '#ffd9b0'
+  split: 0.12
+  saturation: 0.95
+fonts:
+  title: bahnschrift.ttf
+  caption: segoeuib.ttf
+  body: segoeui.ttf
+captions:
+  yt: subtitle
+  short: shorts
+voices: {}      # e.g. narrator: {engine: kokoro, voice: af_heart}  (TTS stage)

@@ -1,0 +1,132 @@
+title: videoforge showreel
+release:
+  wrap: false
+gen:
+  profile: k6
+  retries: 1
+audio:
+  lufs: -16
+  music:
+    src: music/pick.wav
+    gain_db: 0
+    duck_db: 0
+    fade_in: 0.3
+    fade_out: 1.2
+shots:
+- id: ice_planet
+  dur: 3.2
+  cast: []
+  camera:
+    move: push_in
+    amount: 0.08
+    handheld: 0.04
+    ease: lin
+  gen:
+    seed: 41
+    keyframe: 'Epic extreme wide shot at golden hour: a colossal gas giant planet with a glowing blue atmosphere rim and bright
+      thin rings rises huge over the horizon of a vast frozen sea of cracked blue ice, a low warm golden sun on the horizon
+      casts long gold light and long blue shadows across the ice, a lone small astronaut in a white spacesuit stands in the
+      lower third seen from behind, snow streaming low over the ice'
+    motion: A few fine snow grains drift gently along the ice surface; the golden sunlight glints softly on the ice; the astronaut
+      stands still; the planet, its rings and the sky stay completely still.
+    style: realistic_scenic
+    retries: 2
+    judge:
+    - q: Do white streaks, smoke or plumes rise across the frame?
+      expect: 'no'
+    - q: Does the planet in the sky change shape or texture?
+      expect: 'no'
+  layers: []
+- id: visor
+  dur: 2.6
+  cast: []
+  camera:
+    move: push_in
+    amount: 0.06
+    handheld: 0.05
+    ease: lin
+  gen:
+    seed: 53
+    style: realistic_scenic
+    keyframe: Extreme close-up product shot of an empty white space helmet resting on frozen ground at golden hour, its curved
+      visor is a solid opaque gold mirror like polished metal, the gold mirror reflects only a huge ringed planet over endless
+      flat ice and a low golden sun, fine frost crystals along the helmet rim, cold blue ice around it
+    motion: Fine frost crystals glitter on the helmet rim; tiny snowflakes drift past; the reflection in the visor shimmers
+      softly as the light changes.
+  layers: []
+- id: aurora
+  dur: 3.0
+  cast: []
+  camera:
+    move: push_in
+    amount: 0.08
+    handheld: 0.03
+    ease: lin
+  gen:
+    seed: 61
+    style: realistic_scenic
+    keyframe: Epic wide shot at night of an immense frozen canyon of blue ice cliffs, vivid green and gold aurora ribbons
+      ripple across a starry sky, a huge ringed planet hangs low on the horizon, a thin line of fresh boot prints crosses
+      the snowy canyon floor, no people
+    motion: The green and gold aurora ribbons ripple and flow slowly across the sky; stars twinkle; fine snow drifts over
+      the canyon floor; the ice cliffs and the planet stay still.
+    retries: 1
+  layers: []
+- id: monolith
+  dur: 3.0
+  cast: []
+  camera:
+    move: push_in
+    amount: 0.09
+    handheld: 0.04
+    ease: lin
+  gen:
+    seed: 37
+    keyframe: Low wide shot of a line of fresh boot prints in deep snow leading up a snowy ridge to a tall black stone monolith,
+      a thin beam of white light rising from its top into a stormy twilight sky, a tiny astronaut in a white spacesuit standing
+      at its base seen from behind
+    motion: A steady white beam of light shines straight up from the top of the black monolith the whole time; fine snow blows
+      low across the boot prints; storm clouds roll slowly across the sky; the monolith and the astronaut stay exactly the
+      same.
+    retries: 2
+    judge:
+    - q: Is a beam of light visible above the monolith in the last frame?
+      expect: 'yes'
+    - q: Does a dark shape or figure appear on the side of the monolith?
+      expect: 'no'
+  layers: []
+- id: title
+  dur: 3.2
+  cast: []
+  allow_black: true
+  camera:
+    move: push_in
+    amount: 0.04
+  layers:
+  - type: gradient
+    top: '#05080d'
+    bottom: '#000000'
+  - type: text
+    text: VIDEOFORGE
+    font: title
+    size: 0.11
+    x: 0.5
+    y: 0.45
+    color: '#ece6da'
+    at: 0.1
+    in: 0.5
+    shadow: true
+    spacing: 1.0
+  - type: text
+    text: SCRIPT TO SCREEN  ·  OPEN MODELS  ·  ONE GPU
+    font: title
+    size: 0.03
+    x: 0.5
+    y: 0.56
+    color: '#cfc8bb'
+    at: 0.9
+    in: 0.6
+    shadow: true
+look:
+  contrast: 0.62
+  temp: 0.06

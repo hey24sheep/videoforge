@@ -1,0 +1,87 @@
+# 15 s README hero reel (16:9). "The Signal": a lone explorer on a frozen world follows a light to its source.
+# No dialogue; music only. Build: python -m vf build series/showreel/reel/episode.yaml --formats yt
+title: videoforge showreel
+release: {wrap: false}
+gen: {profile: k6, retries: 1}
+audio:
+  lufs: -16
+  music: {src: music/pick.wav, gain_db: 0, duck_db: 0, fade_in: 0.3, fade_out: 1.2}
+shots:
+  - id: ice_planet
+    dur: 3.2
+    cast: []
+    camera: {move: push_in, amount: 0.08, handheld: 0.04, ease: lin}
+    gen:
+      seed: 11
+      keyframe: >-
+        Extreme wide shot of a lone astronaut in a white spacesuit standing small in the lower third of the frame on a
+        vast frozen sea of cracked blue ice, a colossal ringed gas giant planet rising over the horizon and filling
+        the upper sky at dawn, thin snow blowing low across the ice, cold blue shadows and warm golden sunlight,
+        seen from behind, no face visible
+      motion: >-
+        Thin snow blows low across the ice in a steady wind; the astronaut stands still and looks at the planet;
+        the planet's rings glow in the sunlight.
+    layers: &wm
+      - {type: text, text: videoforge, font: title, size: 0.024, x: 0.93, y: 0.95, color: '#ffffff8c', shadow: true, in: 0.0, out: 0.0}
+  - id: visor
+    dur: 2.6
+    cast: []
+    camera: {move: push_in, amount: 0.06, handheld: 0.05, ease: lin}
+    gen:
+      seed: 19
+      style: realistic_scenic
+      keyframe: >-
+        Extreme close-up product shot of an empty white space helmet resting on frozen ground, its curved visor is a
+        solid opaque gold mirror like polished metal, the gold mirror reflects a huge ringed planet and a pale low
+        sun, fine frost crystals along the helmet rim, dark sky behind
+      motion: >-
+        Fine frost crystals glitter on the helmet rim; tiny snowflakes drift past; the reflection in the visor shimmers
+        softly as the light changes.
+    layers: *wm
+  - id: station
+    dur: 3.0
+    cast: []
+    camera: {move: push_in, amount: 0.07, handheld: 0.02, ease: lin}
+    gen:
+      seed: 29
+      style: realistic_scenic
+      keyframe: >-
+        Empty outer space, no people: a colossal ring-shaped space station seen from very far away floating in orbit
+        high above the white cloud tops of a blue planet, the sun rising behind the curved edge of the ring with a
+        soft anamorphic lens flare, deep black space with stars, an uninhabited view with no person in the frame
+      motion: >-
+        The space station holds perfectly still in orbit, rigid and solid; only the white clouds far below drift
+        slowly across the blue planet; the sunlight stays steady.
+      retries: 2
+      judge:
+        - {q: 'Does the space station melt, dissolve, fade away or change shape?', expect: 'no'}
+    layers: *wm
+  - id: monolith
+    dur: 3.0
+    cast: []
+    camera: {move: push_in, amount: 0.09, handheld: 0.04, ease: lin}
+    gen:
+      seed: 37
+      keyframe: >-
+        Low wide shot of a line of fresh boot prints in deep snow leading up a snowy ridge to a tall black stone
+        monolith, a thin beam of white light rising from its top into a stormy twilight sky, a tiny astronaut in a
+        white spacesuit standing at its base seen from behind
+      motion: >-
+        A steady white beam of light shines straight up from the top of the black monolith the whole time; fine
+        snow blows low across the boot prints; storm clouds roll slowly across the sky; the monolith and the
+        astronaut stay exactly the same.
+      retries: 2
+      judge:
+        - {q: 'Is a beam of light visible above the monolith in the last frame?', expect: 'yes'}
+        - {q: 'Does a dark shape or figure appear on the side of the monolith?', expect: 'no'}
+    layers: *wm
+  - id: title
+    dur: 3.2
+    cast: []
+    allow_black: true
+    camera: {move: push_in, amount: 0.04}
+    layers:
+      - {type: gradient, top: '#05080d', bottom: '#000000'}
+      - {type: text, text: VIDEOFORGE, font: title, size: 0.11, x: 0.5, y: 0.45, color: '#ece6da', at: 0.1, in: 0.5, shadow: true, spacing: 1.0}
+      - {type: text, text: 'SCRIPT TO SCREEN  ·  OPEN MODELS  ·  ONE GPU', font: title, size: 0.03, x: 0.5, y: 0.56, color: '#cfc8bb', at: 0.9, in: 0.6, shadow: true}
+      - {type: text, text: videoforge, font: title, size: 0.024, x: 0.93, y: 0.95, color: '#ffffff8c', shadow: true, in: 0.0, out: 0.0}

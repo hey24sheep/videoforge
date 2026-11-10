@@ -1,0 +1,23 @@
+videoforge
+Copyright 2026 hey24sheep (HTG Productions)
+https://hey24sheep.com/videoforge
+https://github.com/hey24sheep/videoforge
+
+This product includes software developed by hey24sheep.
+
+Attribution
+-----------
+If you redistribute videoforge, or a work derived from it, keep this NOTICE file with it (Apache License 2.0,
+section 4(d)) and credit "videoforge by hey24sheep" with a link to https://hey24sheep.com/videoforge.
+
+Watermark
+---------
+Videos rendered with videoforge carry a small "hey24sheep.com/videoforge" mark in the bottom-right corner by default.
+It can be turned off (README: Watermark), but please keep it on: it is as small as it can be, and it helps the
+project grow and stay maintained.
+
+Third-party material
+--------------------
+- .claude/skills/: creative-writing skills, Apache License 2.0 (see .claude/skills/CREATIVE_WRITING_SKILLS_LICENSE.txt
+  and .claude/skills/CREATIVE_WRITING_SKILLS_SOURCE.txt).
+- AI models, tools and Python packages are downloaded separately at setup time and keep their own licences.

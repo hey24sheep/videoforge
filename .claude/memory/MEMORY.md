@@ -1,0 +1,20 @@
+- [videoforge pipeline](videoforge-pipeline.md) — generic YouTube/Shorts series pipeline; START HERE; release via `vf cut`, episodes via autolayout gen scripts
+- [Creative workflow preference](user-creative-workflow.md) — memory, critique + scoring, ask on taste, ship fast
+- [Film pipeline performance](film-pipeline-performance.md) — GPU/cache/encode speed facts for local video work
+- [Procedural film lessons](procedural-film-lessons.md) — quality ceilings, what raised scores, reviewer vs user gap
+- [No Fable model](no-fable-model.md) — never use Fable for subagents/reviewers
+- [Cinematic camera rule](cinematic-camera-rule.md) — no held stills; compositor pans/zooms/blur over locked AI clips
+- [Latest & fastest tools](latest-fastest-tools.md) — always search for current best/fast open models before building
+- [Context hygiene](context-hygiene.md) — STATE.md, compact at 60%, verify after compaction, never invent context %
+- [Long-process watchdog](long-process-watchdog.md) — recheck 30 min+ jobs; ONE waiter per job, kill useless watchers
+- [One fix at a time](one-fix-at-a-time.md) — numbered list, one item, frame+preview, wait for OK; one location/prop design everywhere
+- [Review workflow v2](review-workflow-v2.md) — vf.qa gates + blind 2-critic derived score; never leading critic prompts
+- [Temp negative keywords](temp-negative-keywords.md) — owner's toggleable negative list; distilled models ignore it
+- [No unrequested effects](no-unrequested-effects.md) — never add/keep flashes, transitions, effects the owner didn't ask for; disclose my own choices
+- [Models, not formulas](models-not-formulas.md) — owner: every check/score/grade/script/delivery/lip-sync uses an open model; fit 8 GB, no spill
+- [Caveman reply style](caveman-reply-style.md) — every reply short, answer first; skill in videoforge/.claude/skills
+- [Status update format](status-update-format.md) — always: time estimate + measured scores + flagged defects with score/severity
+- [Talking-head silence rule](talking-head-silence-rule.md) — no mouth motion without voice; per-frame gate + own frame review
+- [Owner viewer desync](owner-viewer-desync.md) — owner's app viewer plays audio ~1 s early; review sync in native player/PC
+- [Script gate: viewer test](script-gate-viewer-test.md) — blind viewer-transcript critics both >= 7; lock facts first; VO required
+- [Never stop other sessions](never-stop-other-sessions.md) — only stop my own tasks; other sessions are off limits
