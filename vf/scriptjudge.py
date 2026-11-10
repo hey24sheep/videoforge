@@ -49,6 +49,21 @@ PERSONAS = {
                                       'swipes away the second something drags or confuses'),
 }
 DRAMA_W, LOGIC_W = 0.7, 0.3
+VOICES = {'narrator': 'NARRATOR (voice-over)'}   # speaker labels in transcripts
+
+
+def load_rubric(path):
+    """A series' own judge wording (kept with the series, e.g. series/<s>/judge.yaml):
+        episode: {criterion: text}   intro: {criterion: text}   voices: {who: LABEL}   personas: {name: {who, model}}
+    Keys present replace the defaults; new criteria are added."""
+    import yaml
+    r = yaml.safe_load(open(path, encoding='utf-8')) or {}
+    for kind, crit in KINDS.items():
+        crit.update(r.get(kind) or {})
+    VOICES.update(r.get('voices') or {})
+    for n, v in (r.get('personas') or {}).items():
+        PERSONAS[n] = dict(PERSONAS.get(n, {}), **v)
+    return r
 
 
 def _first_sentence(t):
@@ -65,7 +80,7 @@ def transcript(episode_yaml):
     ep = yaml.safe_load(open(episode_yaml, encoding='utf-8'))
     lines, t = [], 0.0
     dl = sorted(ep.get('dialogue') or [], key=lambda d: float(d.get('at', 0)))
-    voices = {'narrator': 'NARRATOR (voice-over)'}
+    voices = VOICES
     for i, s in enumerate(ep.get('shots') or []):
         dur = float(s.get('dur', 0))
         g = s.get('gen') or {}
@@ -196,7 +211,15 @@ def main(argv):
     p.add_argument('--kind', default='episode', choices=list(KINDS))
     tb = sub.add_parser('table')
     tb.add_argument('dir')
+    for sp in (t, p, tb):
+        sp.add_argument('--rubric', help='series judge.yaml: its own criteria wording, speaker labels, personas')
     a = ap.parse_args(argv)
+    rub = a.rubric
+    if not rub and a.c == 'transcript':   # a series may keep judge.yaml next to series.yaml
+        cand = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(a.episode))), 'judge.yaml')
+        rub = cand if os.path.exists(cand) else None
+    if rub:
+        load_rubric(rub)
     if a.c == 'transcript':
         s = transcript(a.episode)
         if a.out:
