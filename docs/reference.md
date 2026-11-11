@@ -118,6 +118,7 @@ All open models, run locally; nothing calls a paid API.
 | Stage | Model | Notes |
 |---|---|---|
 | Video, default | Kandinsky 6.0 Lite distill (`profile: k6`) | 6 steps, BF16 block-offloaded; `hires: true` for face close-ups |
+| Video, LTX (`gen: {engine: ltx}`) | LTX-2.5 distilled 22B INT8 via Wan2GP (`vf/gen/ltx_batch.py`) | 8 steps, 384x704 (`VF_LTX_SIZE`), ~50 s per clip; beat K6 on hands, walking and grabs in a blind A/B (5.4 vs 3.0). Licence: free for commercial use under $10M yearly revenue |
 | Video, fast | Wan2.2-TI2V-5B-Turbo (`profile: fast`) | ~50 s per 5 s clip at 832x480 |
 | Video, quality | Wan2.2-I2V-A14B GGUF Q4 + lightx2v (`profile: quality`) | ~10 min per clip |
 | Key frames | Z-Image-Turbo (W8A8 INT8) | best-of-N by face identity |

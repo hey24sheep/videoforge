@@ -29,6 +29,14 @@ SIZE = {False: (384, 672), True: (480, 864)}  # portrait (W, H); landscape swaps
 # (QC, start trim, lip-sync, finishing) is shared. Measured 2026-11-02: ~32 s/clip at 480x832, sharper faces.
 WAN_SIZE = (480, 832)
 WAN_VERSION = 'wan22-ti2v5b-fast|v1'
+# `gen: {engine: ltx}`: LTX-2.5 distilled 22B int8 through WanGP (vf/gen/ltx_batch.py, talk venv) makes the raw clip.
+# Blind A/B 2026-11-11 on 5 hard shots (hands, walk, pour, grab, face), same keyframes: LTX 5.4 vs K6 3.0 mean critic
+# score, LTX won 4 of 5; ~47 s/clip vs ~78 s. Sizes are multiples of 64 (LTX snaps others down).
+LTX_SIZE = tuple(int(x) for x in os.environ.get('VF_LTX_SIZE', '384x704').split('x'))
+LTX_VERSION = 'ltx25-22b-distilled|int8|8step|v1'
+TALK_PY = os.path.join(_AI, 'tools', 'envs', 'talk', 'Scripts', 'python.exe')
+_ENGINES = {'wan': dict(py=GEN_PY, mod='vf.gen.video', name='Wan 2.2 TI2V 5B', extra=dict(profile='fast')),
+            'ltx': dict(py=TALK_PY, mod='vf.gen.ltx_batch', name='LTX-2.5 distilled', extra={})}
 UP = int(os.environ.get('VF_UP', 2))  # 2x HIGH beat 4x ULTRA on faces (2026-11-02: pores vs paint)  # final RTX VSR scale
 UPQ = os.environ.get('VF_UPQ', 'HIGH')  # RTX VSR quality for that pass
 FIN_VERSION = f'fin|denoise-med|expo-{EXPO_MODE}|vfg-high|vsr{UP}-{UPQ.lower()}|v3'
@@ -92,6 +100,43 @@ def _gen(args, timeout=1800, **env):
         run([GEN_PY, '-m'] + args, timeout=timeout, cwd=ROOT, env=e)
 
 
+def _engine_clips(eng, E, jobs, log):
+    """Raw clips from another engine's batch runner (one JSON line per finished clip on stdout)."""
+    log(f"  {eng}: generating {len(jobs)} clip(s) ({E['name']}, {jobs[0]['width']}x{jobs[0]['height']})")
+    tdir = tempfile.mkdtemp(prefix=f'vf_{eng}_')
+    jf = os.path.join(tdir, 'jobs.json')
+    json.dump([dict(image=j['image'], prompt=j['prompt'], seed=j['seed'], frames=j['frames'], width=j['width'],
+                    height=j['height'], out=j['out'] + '.part.mp4', **E['extra']) for j in jobs], open(jf, 'w'))
+    from .gpulock import gpu_lock
+    from .proc import _kill_tree
+    import threading
+    with gpu_lock(f'vf {eng}'):
+        p = subprocess.Popen([E['py'], '-m', E['mod'], jf], cwd=ROOT, stdout=subprocess.PIPE, text=True)
+        dog = threading.Timer(900 * len(jobs) + 2700, _kill_tree, [p])  # a hung child must not hold the GPU lock forever
+        dog.daemon = True
+        dog.start()
+        try:
+            for line in p.stdout:  # one JSON line per finished clip
+                if line.startswith('{'):
+                    r = json.loads(line)
+                    j = jobs[r['i']]
+                    if r.get('ok'):
+                        src = r['out'] if os.path.exists(r['out']) else j['out'] + '.part.mp4'
+                        shutil.move(src, j['out'])
+                        log(f"    {eng} clip {r['i'] + 1}/{len(jobs)} {r.get('seconds', 0):.0f}s")
+                        # no finishing in parallel: the generator holds the GPU (2026-11-02: both crawl)
+                    else:
+                        log(f"    {eng} clip {r['i'] + 1} failed: {r.get('error')}")
+            if p.wait(timeout=600):
+                raise subprocess.CalledProcessError(p.returncode, E['mod'])
+        except BaseException:
+            _kill_tree(p)  # never leave a generator child running after the lock is released
+            raise
+        finally:
+            dog.cancel()
+            shutil.rmtree(tdir, ignore_errors=True)
+
+
 def clips(jobs, log=print, on_clip=None):
     """jobs: [{image, prompt, seed, frames, width, height, steps?}] -> [(path, fps)] (cached).
     on_clip(i, path) is called as soon as each clip exists (cached ones first), so finishing can overlap with the
@@ -102,6 +147,8 @@ def clips(jobs, log=print, on_clip=None):
     for j in jobs:
         if j.get('engine') == 'wan':
             k = _key(WAN_VERSION, _fhash(j['image']), j['prompt'], j['seed'], j['frames'], j['width'], j['height'])
+        elif j.get('engine') == 'ltx':
+            k = _key(LTX_VERSION, _fhash(j['image']), j['prompt'], j['seed'], j['frames'], j['width'], j['height'])
         else:
             args = (_fhash(j['image']), j['prompt'], j['seed'], j['frames'], j['width'], j['height'], j.get('steps', 6))
             k = _key(K6_VERSION, *args)
@@ -121,44 +168,14 @@ def clips(jobs, log=print, on_clip=None):
                 told.add(i)
                 if on_clip:
                     on_clip(i, o)
-    wan = [j for j in todo if j.get('engine') == 'wan']
     if not todo:
         tell()
-    todo = [j for j in todo if j.get('engine') != 'wan']
-    if wan:
-        log(f'  wan: generating {len(wan)} clip(s) (Wan 2.2 TI2V 5B, {WAN_SIZE[0]}x{WAN_SIZE[1]})')
-        tdir = tempfile.mkdtemp(prefix='vf_wan_')
-        jf = os.path.join(tdir, 'jobs.json')
-        json.dump([dict(image=j['image'], prompt=j['prompt'], seed=j['seed'], frames=j['frames'], width=j['width'],
-                        height=j['height'], profile='fast') for j in wan], open(jf, 'w'))
-        from .gpulock import gpu_lock
-        from .proc import _kill_tree
-        with gpu_lock('vf wan'):
-          p = subprocess.Popen([GEN_PY, '-m', 'vf.gen.video', jf], cwd=ROOT, stdout=subprocess.PIPE, text=True)
-          import threading
-          dog = threading.Timer(900 * len(wan) + 900, _kill_tree, [p])  # a hung child must not hold the GPU lock forever
-          dog.daemon = True
-          dog.start()
-          try:
-            for line in p.stdout:  # one JSON line per finished clip
-                if line.startswith('{'):
-                    r = json.loads(line)
-                    if r.get('ok'):
-                        shutil.copyfile(r['out'], wan[r['i']]['out'])
-                        log(f"    wan clip {r['i'] + 1}/{len(wan)} {r.get('seconds', 0):.0f}s")
-                        # no tell() here: Wan uses ~7-8 GB, so finishing a clip on the GPU at the same time
-                        # overflows the 8 GB card and both crawl (2026-11-02: build stalled for an hour)
-                    else:
-                        log(f"    wan clip {r['i'] + 1} failed: {r.get('error')}")
-            if p.wait(timeout=600):
-                raise subprocess.CalledProcessError(p.returncode, 'vf.gen.video')
-          except BaseException:
-            _kill_tree(p)  # never leave a 7 GB Wan child running after the lock is released
-            raise
-          finally:
-            dog.cancel()
-            shutil.rmtree(tdir, ignore_errors=True)
-        tell()
+    for eng, E in _ENGINES.items():
+        sub = [j for j in todo if j.get('engine') == eng]
+        if sub:
+            _engine_clips(eng, E, sub, log)
+            tell()
+    todo = [j for j in todo if j.get('engine') not in _ENGINES]
     if todo:
         log(f'  k6: generating {len(todo)} clip(s) ({sum(1 for j in todo if j["width"] > 400)} hi-res)')
         tdir = tempfile.mkdtemp(prefix='vf_k6_')

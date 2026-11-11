@@ -358,6 +358,7 @@ Measured on one laptop: RTX 4060 Laptop 8 GB (55 W), 31 GB RAM, Windows 11. A de
 |---|---|
 | key frame, Z-Image-Turbo INT8 (576x1024) | ~11-13 s |
 | AI clip, Kandinsky 6 Lite, 5 s at 384x672 (`k6` profile) | ~1.3 min |
+| AI clip, LTX-2.5 distilled, 4 s at 384x704 (`gen: {engine: ltx}`) | ~50 s (first run downloads ~30 GB) |
 | clip finishing: deblur, frame interpolation to 60 fps, 4x upscale | ~30 s per clip |
 | talking shot, InfiniteTalk (one 81-frame window) | ~5.5 min |
 | music, ACE-Step 1.5 turbo | ~3.5 min model load, then ~11 s per 30 s of audio |

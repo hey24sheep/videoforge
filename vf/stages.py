@@ -253,6 +253,9 @@ def _video_jobs(spec, shots, formats):
             if g.get('engine') == 'wan':  # Wan 2.2 TI2V 5B through the k6 path (same QC, trim, lip-sync, finish)
                 from .k6 import WAN_SIZE
                 w, h = WAN_SIZE
+            if g.get('engine') == 'ltx':  # LTX-2.5 distilled (vf/gen/ltx_batch.py), same QC/trim/finish
+                from .k6 import LTX_SIZE
+                w, h = (int(x) for x in g['k6_size']) if g.get('k6_size') else LTX_SIZE
             W, H = (w, h) if formats == ['short'] else (h, w)
         else:
             W, H = _aspect(formats, g.get('size'))
@@ -264,8 +267,8 @@ def _video_jobs(spec, shots, formats):
                    seed=int(g.get('seed', 1)), frames=_clip_frames(s, fps), width=W, height=H, profile=prof)
         if g.get('steps'):
             job['steps'] = int(g['steps'])
-        if prof == 'k6' and g.get('engine') == 'wan':
-            job['engine'] = 'wan'
+        if prof == 'k6' and g.get('engine') in ('wan', 'ltx'):
+            job['engine'] = g['engine']
         if g.get('_last'):  # only pass what's set: the cache keys on the arguments actually given
             job['last_image'] = os.path.abspath(g['_last'])
         jobs.append(job)

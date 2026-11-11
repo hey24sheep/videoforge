@@ -108,6 +108,13 @@ State when paused: new pipeline is in the code (k6 profile, grade, prop + silent
 prompt, SageAttention 2.2 auto kernel, lossless NVENC intermediates) but untested end to end; 5/15 clips cached in
 cache/k6. Next: implement 1-4, run the finishing test on one clip, then the full build.
 
+## LTX-2.5 engine (2026-11-11)
+`gen: {engine: ltx}` (shot, episode or series `gen:`) makes the raw clip with LTX-2.5 distilled 22B INT8 through Wan2GP
+(vf/gen/ltx_batch.py, talk venv); QC, trim, lip-sync and finishing are the K6 path's. Blind A/B on 5 hard shots (same
+keyframes): LTX 5.4 vs K6 3.0, ~47 s vs ~78 s per clip, ~2 GB VRAM peak. Sizes are multiples of 64 (`VF_LTX_SIZE`,
+default 384x704; `k6_size` per shot). K6 stays the default so approved episodes keep their cached clips.
+576x1024 tested blind on the same 5 shots: 5.1 vs 5.3 for the small size, ~80 s vs ~47 s per clip: keep 384x704.
+
 ## Small checker models (gen venv)
 - judge (vf/gen/judge.py): Qwen3-VL-4B (Apache-2.0, fp8-stored, 5.5 GB peak) answers yes/no questions about 8
   sampled frames: run_gen('judge', [dict(clip=, questions=[dict(q=, expect='yes'|'no')], checklist=['appear','text'],
