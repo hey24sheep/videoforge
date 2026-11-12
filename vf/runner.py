@@ -7,6 +7,8 @@
         voices    vf voices (directed voices, out/voices.json); then gen again so shots follow the real takes
         keyframes vf keyframes --formats short (+ out/keyframes_sheet.jpg)
         cut       vf cut: intro + episode + outro, vf check, join, phone copy (or a --preview build)
+        framecheck  the learned frame checker (vf/framecheck.py) on the new build: out/framecheck_fixes.md. It
+                  never stops the run (skipped with a note when no model is trained yet).
       --until keyframes stops for a keyframe review; --detach starts the same run under tools/jobwatch.py (survives
       the session) and prints the job id to watch.
   vf doctor   checks interpreters, venvs, GPU/VRAM, NVENC, ffmpeg, model folders, fonts, free disk
@@ -16,7 +18,7 @@ import os, shutil, subprocess, sys, time
 _AI = os.environ.get('VF_AI_ROOT', r'D:\claude_work\hero_film')  # root of the AI venvs, tools and models (README: Configuration)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STAGES = ['gen', 'lint', 'voices', 'keyframes', 'cut']
+STAGES = ['gen', 'lint', 'voices', 'keyframes', 'cut', 'framecheck']
 
 
 def _py():
@@ -31,7 +33,7 @@ def _sh(args, log):
     return r.returncode
 
 
-def run(target, until='cut', preview=False, detach=False, log=print):
+def run(target, until='framecheck', preview=False, detach=False, log=print):
     target = os.path.abspath(target)
     if detach:
         name = 'run_' + os.path.basename(os.path.dirname(target))
@@ -55,6 +57,7 @@ def run(target, until='cut', preview=False, detach=False, log=print):
         ('keyframes', lambda: _sh([_py(), '-m', 'vf', 'keyframes', ep, '--formats', 'short', '--allow-encode'], log)),
         ('cut', lambda: _sh([_py(), '-m', 'vf', 'build', ep, '--formats', 'short', '--preview', '--allow-encode'], log)
          if preview else _sh([_py(), '-m', 'vf', 'cut', ep], log)),
+        ('framecheck', lambda: _framecheck(ep, log) if not preview else 0),
     ]
     for i, (name, fn) in enumerate(steps):
         if i > stop:
@@ -64,7 +67,20 @@ def run(target, until='cut', preview=False, detach=False, log=print):
         if rc:
             log(f'=== run stopped at {name} (exit {rc})')
             return rc
-    log('=== run done' + (f' (stopped after {until} for review)' if until != 'cut' else ''))
+    log('=== run done' + (f' (stopped after {until} for review)' if until not in ('cut', 'framecheck') else ''))
+    return 0
+
+
+def _framecheck(ep, log):
+    """Warn-only stage: a missing model or a failure is logged, never an exit code."""
+    from . import framecheck
+    if not os.path.exists(framecheck._p('model.pkl')):
+        log('  framecheck: no trained model yet (vf framecheck learn + train); skipped')
+        return 0
+    try:
+        framecheck.check(ep, log=log)
+    except Exception as e:   # the checker must never cost a finished build
+        log(f'  framecheck failed (ignored): {type(e).__name__}: {e}')
     return 0
 
 

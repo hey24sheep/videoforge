@@ -3,6 +3,7 @@ joined, plus a phone copy under the size limit. Replaces the hand-written jobs/e
 
 series.yaml:
   intro: intro/episode.yaml      shared intro spec; a text layer containing {episode} gets the episode's label
+  intro: titles/intro.mp4         intro/outro may be a finished video (e.g. a vf.mograph render), joined as it is
   outro: outro/episode.yaml      shared outro spec
   release: {name: MySeries}      file name prefix (default: the series folder name)
 episode.yaml:
@@ -73,6 +74,11 @@ def cut(episode_yaml, skip_build=False, no_check=False, phone_mb=28.0, log=print
     wrap = (ep.get('release') or {}).get('wrap', True)   # release: {wrap: false} = no series intro/outro (a trailer)
     if not wrap:
         se = dict(se, intro=None, outro=None)
+    # a finished video (e.g. a vf.mograph title sequence) is joined as it is, no build
+    vid = lambda k: se.get(k) and os.path.splitext(se[k])[1].lower() in ('.mp4', '.mov', '.mkv')
+    pre_intro = os.path.join(sdir, se['intro']) if vid('intro') else None
+    pre_outro = os.path.join(sdir, se['outro']) if vid('outro') else None
+    se = dict(se, **({'intro': None} if pre_intro else {}), **({'outro': None} if pre_outro else {}))
     if se.get('intro'):
         intro = yaml.safe_load(open(os.path.join(sdir, se['intro']), encoding='utf-8'))
         if not label and '{episode}' in yaml.safe_dump(intro):
@@ -97,7 +103,8 @@ def cut(episode_yaml, skip_build=False, no_check=False, phone_mb=28.0, log=print
         parts = [newest(os.path.join(root, 'intro'))] if se.get('intro') else []
         main = newest(root)
         outro = newest(os.path.join(sdir, os.path.dirname(se['outro']))) if se.get('outro') else None
-    parts = [p for p in parts if p] + [main] + ([outro] if outro else [])
+    outro = pre_outro or outro
+    parts = ([pre_intro] if pre_intro else []) + [p for p in parts if p] + [main] + ([outro] if outro else [])
     # cold open: release: {intro_after: <shot id>} plays the episode up to the end of that shot, then the series intro,
     # then the rest of the episode. A part is a path or (path, input options).
     after = (ep.get('release') or {}).get('intro_after')

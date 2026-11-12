@@ -276,7 +276,7 @@ def main(argv=None):
     ck.add_argument('--no-sync', action='store_true', help='skip the SyncNet model run (no GPU)')
     ru = sub.add_parser('run', help='whole path: gen -> lint -> voices -> keyframes -> cut (vf/runner.py)')
     ru.add_argument('target', help='<ep>_gen.py or episode.yaml')
-    ru.add_argument('--until', default='cut', choices=['gen', 'lint', 'voices', 'keyframes', 'cut'])
+    ru.add_argument('--until', default='framecheck', choices=['gen', 'lint', 'voices', 'keyframes', 'cut', 'framecheck'])
     ru.add_argument('--preview', action='store_true')
     ru.add_argument('--detach', action='store_true', help='run under tools/jobwatch.py (survives the session)')
     ru.add_argument('--no-watermark', action='store_true', help='leave out the small hey24sheep.com/videoforge corner mark (please keep it: README Watermark)')
@@ -301,12 +301,17 @@ def main(argv=None):
     sj.add_argument('rest', nargs=argparse.REMAINDER)
     jd = sub.add_parser('judge', help='every judge in one place: script, dialogue, music, clip, image, video, critics (vf/judge.py)')
     jd.add_argument('rest', nargs=argparse.REMAINDER)
+    fc = sub.add_parser('framecheck', help='learned frame checker: defect frames, predicted shot scores, fix plan (vf/framecheck.py)')
+    fc.add_argument('rest', nargs=argparse.REMAINDER)
     a = ap.parse_args(argv)
     if getattr(a, 'no_watermark', False):
         os.environ['VF_WATERMARK'] = '0'   # read by vf/render.py; inherited by every child build
     if a.cmd == 'judge':
         from .judge import main as j_main
         return j_main(a.rest)
+    if a.cmd == 'framecheck':
+        from .framecheck import main as fc_main
+        return fc_main(a.rest)
     if a.cmd == 'script-judge':
         from .scriptjudge import main as sj_main
         return sj_main(a.rest)

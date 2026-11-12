@@ -27,8 +27,10 @@ def L(who, text, direction, **kw):
 def talk_shot(id, who, face, kf, line, direction, motion, style, cam=None, seed=7, extra_lines=(), rerolls=None,
               image=None, nobreath=NOBREATH, extra=None):
     """An on-screen speaking shot: keyframe (prompt `kf` or a supplied `image`) acted over the line by InfiniteTalk."""
+    pre = [t.split('.')[0].split(',')[0][:24].strip() for t in [line] + [x['text'] for x in extra_lines]]
     g = dict(**({'style': style} if style else {}), motion=motion, seed=seed, hires=True, k6_size=[576, 1024], retries=0,
-             talk=dict(line=line.split('.')[0].split(',')[0][:24].strip(), prompt=motion + " " + nobreath + ".",
+             # every line of the shot is acted on screen (extra_lines too: talk.line takes a list of prefixes)
+             talk=dict(line=pre if len(pre) > 1 else pre[0], prompt=motion + " " + nobreath + ".",
                        **({'rerolls': rerolls} if rerolls else {})))
     if image:
         g['image'] = image

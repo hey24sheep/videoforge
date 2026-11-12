@@ -283,7 +283,7 @@ def render_segment(key, i, fmt, fps, scale, code, deps, out=None, _spec=None, _q
     shot = spec['shots'][i]
     n = max(1, int(round(shot['dur'] * fps)))
     look = dict(spec['look'], **(shot.get('look') or {}))
-    grain = float(look.get('grain', 0.015))
+    grain = float(look.get('grain', 0.0))
     gf = int(round(shot['start'] * fps))
     wr = Writer(out, W, H, fps)
     means = []

@@ -66,6 +66,16 @@ not and the mouth drifted 440 ms. Never go back to the 20-step default: it spill
   A shot that really wants a dip says `allow_dip: true` and the owner must have asked for it.
 - Review harness for a revised cut against the approved base (`vf/qa.py`, qa-11): RAFT flicker/motion, director vote
   (Qwen3.5-9B), face-quality drop (VisualQuality-R1), blind Opus + Sonnet critics, see `docs/review_workflow.md`.
+- Learned frame checker (`vf/framecheck.py`, runs as the last `vf run` stage, CPU only, warn-only): flags defect
+  frames, predicts each shot's critic score and writes `out/framecheck_fixes.md`, the fix plan ranked by what fixed the
+  same defect type before. The every-frame critic loop that trains it:
+  1. `vf framecheck grids <episode.yaml>` -> `out/framecheck/<shot>.jpg` + `intent.txt` (12 fps, numbered tiles).
+  2. Parallel critics with `prompts/frame_review.md`: each writes `review_<name>.md` + `labels_<name>.json`; merge
+     the label files into `labels.json` in the grid folder.
+  3. `vf framecheck learn <grid dir>` then `vf framecheck train` (prints held-out frame AUC and score correlation).
+  4. Before rebuilding: `vf framecheck fixes record <episode> <shot> <action,...> --labels <this labels.json>` per
+     fixed shot; after the next review: `vf framecheck fixes resolve <next labels.json>`; `vf framecheck fixes table`.
+  It is a first pass: critics still read every frame before anything goes to the owner.
 - Identity < 0.60 on a shot: regenerate (new seeds), keep the best, flag it to the owner. Do not hide it.
 - The owner's own eyes are the final gate. Weight story clarity and visible artifacts above polish.
 

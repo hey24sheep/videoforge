@@ -152,21 +152,26 @@ def piano(dur, rng, notes='A3@0', vel=0.6, room=0.5):
     return _reverb(out, float(room), rng)
 
 
-def ring(dur, rng, pattern='2,4'):
+def ring(dur, rng, pattern='2,4', soft=0):
+    """Phone bell. soft=1: upper partials cut and band-limited to 3 kHz (the 2.6/3.9 kHz partials pierce on headphones)."""
     on, off = [float(x) for x in str(pattern).split(',')]
+    soft = float(soft)
     t = _t(dur)
     gate = ((t % (on + off)) < on).astype(float)
     gate = _lp(gate, 30, 1)
     clap = 0.5 + 0.5 * np.sign(np.sin(2 * np.pi * 20 * t))      # 20 Hz striker
     strikes = np.diff(clap, prepend=0).clip(0, None)
     bell = np.zeros_like(t)
-    for f, d, g in ((1180, 0.25, 1.0), (1790, 0.16, 0.6), (2650, 0.1, 0.35), (3900, 0.06, 0.2)):
+    parts = ((1180, 0.25, 1.0), (1790, 0.16, 0.6), (2650, 0.1, 0.35), (3900, 0.06, 0.2))
+    if soft:
+        parts = ((1180, 0.25, 1.0), (1790, 0.16, 0.35), (2650, 0.1, 0.08))
+    for f, d, g in parts:
         L = int(0.4 * SR)
         k = np.sin(2 * np.pi * f * np.arange(L) / SR) * np.exp(-np.arange(L) / (d * SR))
         from scipy.signal import fftconvolve
         bell += g * fftconvolve(strikes, k)[:len(t)]
     bell *= gate
-    bell = _bp(bell, 600, 6000) * 0.5
+    bell = _bp(bell, 600, 3000 if soft else 6000) * 0.5
     x = np.stack([bell, bell * 0.92])
     return _reverb(x, 0.25, rng)
 

@@ -8,7 +8,7 @@ frame moves (camera dolly + sway, cards turning), no held stills. Series-agnosti
 
 Spec (all times in s, positions in px at the focus plane; x right, y down, z away from camera):
   name, size: [1080, 1920], fps: 60, dur: 12
-  bg: '#07080a'  fog: '#1a1f24'  accent: '#c22f3f'  grain: 0.05  vignette: 0.55  fade_out: 0.6
+  bg: '#07080a'  fog: '#1a1f24'  accent: '#c22f3f'  grain: 0  vignette: 0.55  fade_out: 0.6
   camera: {z0: 0, z1: 900, sway: 40, roll: 1.5}         dolly forward z0 -> z1 (eased), slow x/y sway, roll in degrees
   cards: [{img, x, y, z, w, rx, ry, rz, spin: [drx, dry, drz] per s, bw: true, border: 0.03, at: 0, until: dur}]
   titles: [{small, big, at, until, y: 0.45, big_size: 0.13, small_size: 0.035}]
@@ -300,7 +300,7 @@ def render(spec_path):
                 fr = fr * (1 - L[..., 3:4]) + L[..., :3] * L[..., 3:4]
         fr *= vig[..., None]
         fr += (rng.standard_normal((H // 2, W // 2)).astype(np.float32).repeat(2, 0).repeat(2, 1)[..., None]
-               * float(S.get('grain', 0.05)))
+               * float(S.get('grain', 0.0)))
         fo_t = float(S.get('fade_out', 0.6))
         if fo_t and t > dur - fo_t:
             fr *= _ease((dur - t) / fo_t)
