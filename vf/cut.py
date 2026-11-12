@@ -10,6 +10,7 @@ episode.yaml:
   episode: {no: 2, title: The Visitor}    -> label "EPISODE 2: THE VISITOR"  (or episode: {label: "..."})
   release: {wrap: false}                  -> no intro/outro (a teaser/trailer): build, check, phone copy only
   release: {intro_after: <shot id>}       -> cold open: the series intro plays after that shot, not first
+  release: {intro: titles/intro_ep02.mp4} -> this episode's own intro (or outro), path from the series folder
 
 Steps (each build is cache-backed: an unchanged intro/outro re-renders in ~20 s):
   1. writes <ep>/intro/episode.yaml (the series intro with the label filled in) and builds it
@@ -74,6 +75,8 @@ def cut(episode_yaml, skip_build=False, no_check=False, phone_mb=28.0, log=print
     wrap = (ep.get('release') or {}).get('wrap', True)   # release: {wrap: false} = no series intro/outro (a trailer)
     if not wrap:
         se = dict(se, intro=None, outro=None)
+    else:   # release: {intro: X, outro: Y} = this episode's own intro/outro (path from the series folder), e.g. a title card naming it
+        se = dict(se, **{k: v for k, v in (ep.get('release') or {}).items() if k in ('intro', 'outro') and v})
     # a finished video (e.g. a vf.mograph title sequence) is joined as it is, no build
     vid = lambda k: se.get(k) and os.path.splitext(se[k])[1].lower() in ('.mp4', '.mov', '.mkv')
     pre_intro = os.path.join(sdir, se['intro']) if vid('intro') else None
