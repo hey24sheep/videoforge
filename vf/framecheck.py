@@ -121,14 +121,16 @@ def grids(yaml_path, video=None, out_dir=None, log=print):
     ep = yaml.safe_load(open(yaml_path, encoding='utf-8')) or {}
     spec = {s.get('id'): s for s in ep.get('shots', [])}
     cap = cv2.VideoCapture(video)
+    margin = 2.0 / (cap.get(cv2.CAP_PROP_FPS) or 25)   # seek lands up to a frame late: stay 2 frames inside the cut
     res, intent = {}, []
     for s in shots_of(yaml_path):
         g = (spec.get(s['id']) or {}).get('gen') or {}
         intent.append(f"- {s['id']} ({'talk' if s['talk'] else 'insert'}, {s['end'] - s['start']:.2f} s): "
                       f"{g.get('keyframe') or '(image or finished clip)'} | MOTION: {g.get('motion', '')}")
         tiles = []
-        for i in range(max(1, int(round((s['end'] - s['start']) * FPS)))):
-            cap.set(cv2.CAP_PROP_POS_MSEC, (s['start'] + (i + 0.5) / FPS) * 1000)
+        for i in range(max(1, int((s['end'] - s['start']) * FPS))):
+            t = min(s['start'] + (i + 0.5) / FPS, s['end'] - margin)
+            cap.set(cv2.CAP_PROP_POS_MSEC, max(s['start'], t) * 1000)
             ok, f = cap.read()
             if not ok:
                 break

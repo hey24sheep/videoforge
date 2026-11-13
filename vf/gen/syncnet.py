@@ -33,14 +33,18 @@ def check(video):
     from eval.syncnet_detect import SyncNetDetector
     work = tempfile.mkdtemp(prefix='vf_sync_')
     try:
-        det = SyncNetDetector(device='cuda', detect_results_dir=os.path.join(work, 'detect'))
-        det(video_path=video, min_track=50)
-        crops = os.listdir(os.path.join(work, 'detect', 'crop'))
+        crops = []
+        for mt in (50, 25):   # 25 = shots under 2 s (50 frames at 25 fps); a 50-frame track found first wins
+            d = os.path.join(work, f'detect{mt}')
+            SyncNetDetector(device='cuda', detect_results_dir=d)(video_path=video, min_track=mt)
+            crops = [os.path.join(d, 'crop', c) for c in os.listdir(os.path.join(d, 'crop'))]
+            if crops:
+                break
         if not crops:
             return None, None
         best = None
         for c in crops:
-            off, conf, _ = _model().evaluate(video_path=os.path.join(work, 'detect', 'crop', c),
+            off, conf, _ = _model().evaluate(video_path=c,
                                              temp_dir=os.path.join(work, 'temp'))
             if best is None or conf > best[1]:
                 best = (int(off), float(conf))
