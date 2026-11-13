@@ -1,5 +1,9 @@
 # videoforge changelog
 
+## Unreleased
+- `gen.ink` styles: `style: engrave` (cut into metal or pressed into paper: groove shading from one light) and `style: emboss` (raised), with `depth` and `light`.
+- `gen.ink` `bake: true`: the text goes into the keyframe the video model animates, so it moves with the prop. The tracked stamp it replaces can drift off a prop that moves (text floats).
+
 ## 1.3.0 (2026-11-13): terminal CLI
 - `vf` with no command shows the commands in groups (Make, Check, Look after); `vf --version`; colour help on every
   command (`rich`, `rich-argparse`). Output to a file or pipe stays plain text, so job logs read the same.

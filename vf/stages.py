@@ -259,7 +259,12 @@ def _video_jobs(spec, shots, formats):
             W, H = (w, h) if formats == ['short'] else (h, w)
         else:
             W, H = _aspect(formats, g.get('size'))
-        job = dict(image=os.path.abspath(g['_image']),
+        img = g['_image']
+        if g.get('ink'):  # baked ink: the model animates the inked keyframe, so the text moves with the prop
+            from .inktext import baked, ink
+            if baked(g['ink']):
+                img = ink(g['_image'], g['ink'])[0]
+        job = dict(image=os.path.abspath(img),
                    # motion prompts follow the EPISODE style; `motion_style` (opt-in) overrides it per shot, e.g. a
                    # trailer reusing another episode's shots must wrap them in that episode's style (same cache key)
                    prompt=_wrap(spec, g.get('motion', g.get('keyframe', '')), kind='motion',
@@ -300,6 +305,10 @@ def _judge_jobs(spec, shots_clips):
             jobs.append(None)
             continue
         qc = g.get('qc') or {}  # `qc: {text: false}` for shots whose lettering is intended (an embossed badge number)
+        if g.get('ink'):  # baked ink puts the intended text into the clip: the no-lettering check would reject it
+            from .inktext import baked
+            if baked(g['ink']):
+                qc = dict(qc, text=False)
         cl = ([] if qc.get('text') is False else ['text']) + ([] if qc.get('appear') is False else ['appear'])
         qs = list(g.get('judge') or []) + _persist_questions(g) + _silent_mouth_questions(spec, s)
         jobs.append(dict(clip=os.path.abspath(clip), questions=qs, checklist=cl, frames=12, describe=False))
@@ -519,8 +528,9 @@ def generate(spec, formats, log=print, retries=None):
                 fin = face_tone(fin, **g['face_tone'])
             stamps = list(g['stamp'] if isinstance(g.get('stamp'), list) else ([g['stamp']] if g.get('stamp') else []))
             if g.get('ink'):  # text written into a prop on the keyframe, carried onto the clip as ink: vf/inktext.py
-                from .inktext import stamp_entry
-                stamps.append(stamp_entry(g['_image'], g['ink']))
+                from .inktext import baked, stamp_entry
+                if not baked(g['ink']):  # baked text is already in the clip
+                    stamps.append(stamp_entry(g['_image'], g['ink']))
             if stamps:  # keyframe edit warped onto the clip, clip's own light: vf/platelock.py
                 from .platelock import stamp
                 for st in stamps:  # several edits in order

@@ -38,6 +38,8 @@ Authoring rules that matter: the AI camera never moves; props and states live in
 in motion prompts; one shot per beat, each <= 5 s of clip (dur x speed <= 5).
 - Text on a prop (a log entry, a note) is written INTO the prop: `gen: {ink: {text, center, angle, size}}`
   (vf/inktext.py, carried onto the clip by the ink stamp). Never a `text` layer with `in_scene` (owner: "pasted on top").
+  Metal or a pressed label: `style: engrave` (or `emboss`) + `bake: true`, so the text is part of the picture the
+  model animates and cannot float off a moving prop; keep the motion still.
 - Talk shots keep the hands out of frame: never name a hand-held prop in their keyframe unless a hand holds it in the
   picture ("lantern glow below his face" made a lantern float). Lint warns; `vf check` reviews it.
 In-person voices that must not sound like a telephone: `fx: null` on that dialogue line (the series voice default stays).
