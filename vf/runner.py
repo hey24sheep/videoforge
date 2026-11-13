@@ -62,7 +62,11 @@ def run(target, until='framecheck', preview=False, detach=False, log=print):
     for i, (name, fn) in enumerate(steps):
         if i > stop:
             break
-        log(f'=== [{i + 1}/{stop + 1}] {name}')
+        from . import ui
+        if ui.live() and log is print:   # terminal: a coloured rule; logs keep the line tools/jobwatch.py and vf status read
+            ui.CON.rule(f'[bold magenta][{i + 1}/{stop + 1}] {name}[/]', align='left', style='magenta')
+        else:
+            log(f'=== [{i + 1}/{stop + 1}] {name}')
         rc = fn()
         if rc:
             log(f'=== run stopped at {name} (exit {rc})')

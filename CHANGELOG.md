@@ -1,5 +1,16 @@
 # videoforge changelog
 
+## 1.3.0 (2026-11-13): terminal CLI
+- `vf` with no command shows the commands in groups (Make, Check, Look after); `vf --version`; colour help on every
+  command (`rich`, `rich-argparse`). Output to a file or pipe stays plain text, so job logs read the same.
+- `vf status [--watch] [--all] [--json]`: running and recent jobs, `vf run` stage bar, last log line or known failure
+  cause, GPU load, VRAM, temperature.
+- `vf config [get|set|unset] [--json]`: every `VF_*` setting with value, source (env / file / default) and default.
+  `vf config set` saves to `vf.config.json` (not committed); an environment variable still wins.
+- Progress bar over the render loop of `vf build`; coloured stage rules in `vf run`; coloured `vf doctor`.
+- `vf`, `vf status`, `vf config` and `vf --version` start without the render stack (no cupy import).
+- Fix: tools/jobwatch.py could report a finished job as running or STALLED when Windows reused its pid.
+
 ## 1.2.1 (2026-11-10): cleanup
 - `vf.gen.k6_batch` run on its own now defaults to `K6_PREC=bf16`, the same as `vf` itself.
 - Unused precision bakes removed from models/hf/vf_baked: K6 fp8 and int8, Z-Image fp8store and fp8compute, Wan 5B fp8compute.

@@ -150,7 +150,10 @@ def _boot_time():
 def classify(job, stall_min):
     # a job started before the last boot cannot be alive: after a reboot Windows hands its old pids to other
     # processes (2026-11-08: audiodg/svchost made two dead jobs look 'running' and blocked the restart)
-    alive = job.get('started', 0) > _boot_time() and (_alive(job.get('pid')) or _alive(job.get('runner_pid')))
+    # a recorded exit code + end time is final: Windows reuses pids, so a new process could make it look alive
+    finished = job.get('rc') is not None and job.get('ended')
+    alive = not finished and job.get('started', 0) > _boot_time() and (
+        _alive(job.get('pid')) or _alive(job.get('runner_pid')))
     tail = _tail(job['log'])
     age = (time.time() - os.path.getmtime(job['log'])) / 60 if os.path.exists(job['log']) else None
     cause = None

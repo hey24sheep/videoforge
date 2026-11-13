@@ -209,15 +209,18 @@ def _build(path, formats, preview=False, force=False):
         q.sources()
         t = time.time()
         parts, fresh = [], 0
-        for i, shot in enumerate(spec['shots']):
-            before = memo.STATS['miss']
-            ts = time.time()
-            p = render_segment(shot_key(spec, i, fmt), i, fmt, fps, scale, code, shot_deps(spec, i),
-                               _spec=spec, _qc=q)
-            if memo.STATS['miss'] > before:
-                fresh += 1
-                print(f'  {fmt} {shot["id"]}: rendered {shot["dur"]:.1f}s in {time.time() - ts:.1f}s')
-            parts.append(p)
+        from . import ui
+        with ui.progress(len(spec['shots']), f'render {fmt}') as step:
+            for i, shot in enumerate(spec['shots']):
+                before = memo.STATS['miss']
+                ts = time.time()
+                p = render_segment(shot_key(spec, i, fmt), i, fmt, fps, scale, code, shot_deps(spec, i),
+                                   _spec=spec, _qc=q)
+                if memo.STATS['miss'] > before:
+                    fresh += 1
+                    print(f'  {fmt} {shot["id"]}: rendered {shot["dur"]:.1f}s in {time.time() - ts:.1f}s')
+                parts.append(p)
+                step(note=shot['id'])
         items = q.report(outdir, parts)
         errs = [i for i in items if i['severity'] == 'error']
         for it in items[:12]:
@@ -244,9 +247,30 @@ def _build(path, formats, preview=False, force=False):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog='vf')
-    sub = ap.add_subparsers(dest='cmd', required=True)
-    b = sub.add_parser('build')
+    from . import ui
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if not argv:
+        ui.overview()
+        return
+    passthru = {'status': 'status', 'config': 'config', 'judge': 'judge', 'framecheck': 'framecheck',
+                'script-judge': 'scriptjudge'}
+    if argv[0] in passthru:   # these parse their own arguments, so `vf judge -h` shows judge's help
+        from importlib import import_module
+        rc = import_module('.' + passthru[argv[0]], 'vf').main(argv[1:])
+        sys.exit(rc if isinstance(rc, int) else 0)
+    fmt = ui.help_formatter()
+    ap = argparse.ArgumentParser(prog='vf', formatter_class=fmt,
+                                 description='videoforge: cached local GPU pipeline for AI series episodes. '
+                                             'Run vf with no arguments for the grouped command list.')
+    ap.add_argument('--version', action='version', version=f'videoforge {ui.version()}')
+    sub = ap.add_subparsers(dest='cmd', required=True, metavar='<command>')
+    _add = sub.add_parser
+    sub.add_parser = lambda *x, **k: _add(*x, formatter_class=fmt, **k)   # colour help on every subcommand
+    st = sub.add_parser('status', help='running and recent jobs, stage progress, GPU (vf/status.py)')
+    st.add_argument('rest', nargs=argparse.REMAINDER)
+    cf = sub.add_parser('config', help='every VF_* setting: value, source, default; get / set / unset (vf/config.py)')
+    cf.add_argument('rest', nargs=argparse.REMAINDER)
+    b = sub.add_parser('build', help='render an episode.yaml to one or more formats')
     b.add_argument('episode')
     b.add_argument('--formats', default=None, help='comma list: ' + ','.join(S.FORMATS))
     b.add_argument('--preview', action='store_true')
@@ -256,8 +280,8 @@ def main(argv=None):
     enc_help = ('allow text encoders to load for new or changed prompts (off by default: a build whose prompt '
                 'embeddings are not all cached stops before anything heavy loads; vf/gen/guard.py)')
     b.add_argument('--allow-encode', action='store_true', help=enc_help)
-    sub.add_parser('formats')
-    sub.add_parser('styles')
+    sub.add_parser('formats', help='output formats')
+    sub.add_parser('styles', help='visual styles')
     c = sub.add_parser('clean', help='same as gc --apply (kept for old scripts)')
     c.add_argument('episode', nargs='?')
     g = sub.add_parser('gc', help='list (or --apply: move to the Recycle Bin) cache files no latest build uses')
@@ -306,6 +330,12 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if getattr(a, 'no_watermark', False):
         os.environ['VF_WATERMARK'] = '0'   # read by vf/render.py; inherited by every child build
+    if a.cmd == 'status':
+        from .status import main as st_main
+        sys.exit(st_main(a.rest))
+    if a.cmd == 'config':
+        from .config import main as cf_main
+        sys.exit(cf_main(a.rest))
     if a.cmd == 'judge':
         from .judge import main as j_main
         return j_main(a.rest)
@@ -325,7 +355,7 @@ def main(argv=None):
         if a.cmd == 'run':
             sys.exit(runner.run(a.target, a.until, a.preview, a.detach))
         if a.cmd == 'doctor':
-            sys.exit(runner.doctor())
+            sys.exit(runner.doctor(log=ui.doctor_line))
         sys.exit(runner.new(a.series, a.ep, a.no, a.title))
     if a.cmd == 'cut':
         from .cut import cut

@@ -163,6 +163,9 @@ quality video model up front: `<gen python> -m vf.gen.fetch_models`. The models 
 [docs/reference.md](docs/reference.md) (Models).
 
 ### Configuration
+`vf config` lists every setting with its value and where it came from. `vf config set VF_ENCODER cpu` saves a value
+to `vf.config.json` (not committed); an environment variable wins over the file.
+
 | Variable | Default | What it sets |
 |---|---|---|
 | `VF_AI_ROOT` | `D:\claude_work\hero_film` | root of the AI venvs (`tools/envs/`), tools (`tools/`) and models (`models/`) |
@@ -185,7 +188,9 @@ quality video model up front: `<gen python> -m vf.gen.fetch_models`. The models 
 ## ✅ Verify the install
 
 ```bash
+vf                                                             # the commands, grouped
 vf doctor                                                      # interpreters, venvs, GPU, NVENC, ffmpeg, models, disk
+vf status                                                      # running and recent jobs (--watch: live)
 python -m vf lint  series/demo/ep01/episode.yaml               # spec check, no GPU
 python -m vf build series/demo/ep01/episode.yaml --formats short --preview   # no AI models needed
 python -m vf check series/demo/ep01/episode.yaml               # quality gates on the render
