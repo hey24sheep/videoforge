@@ -61,7 +61,9 @@ def start_gen(wait=120):
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
     flags = 0
     if os.name == 'nt':
-        flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
+        # a hidden console, not DETACHED: the venv python.exe is a launcher, and its real-python child opened a new,
+        # empty console window on the owner's desktop when the launcher had no console at all (2026-11-14)
+        flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
     with open(LOG, 'a', encoding='utf-8') as log:
         subprocess.Popen([GEN_PY, '-m', 'vf.gen.server', '--port', str(PORT)], cwd=ROOT, env=_env(),
                          stdout=log, stderr=log, stdin=subprocess.DEVNULL, creationflags=flags)

@@ -97,7 +97,9 @@ def _tail(path, n=40000):
 
 
 def _spawn(argv, log=None):
-    flags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
+    # hidden console (CREATE_NO_WINDOW), not DETACHED_PROCESS: console children of a console-less process (venv
+    # launchers, ffmpeg) each opened an empty window on the desktop. Breakaway + own group still survive the session.
+    flags = CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
     out = open(log, 'ab') if log else subprocess.DEVNULL
     kw = dict(stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, close_fds=True, cwd=ROOT)
     try:  # leave the caller's job object so its teardown cannot kill us
