@@ -300,6 +300,26 @@ def kill_tree(root):
 PRIORITY = {'idle': 0x40, 'below_normal': 0x4000, 'normal': 0x20}
 
 
+def limit_self(cores, label='job'):
+    """Pin this process to its first `cores` logical cores with that many math threads (call before importing torch
+    for the env vars to count). The jobwatch guard keeps a narrower mask it finds. Returns the core count or None."""
+    try:
+        n = max(1, min(os.cpu_count() or 2, int(cores)))
+    except (TypeError, ValueError):
+        return None
+    for k in ('OMP_NUM_THREADS', 'MKL_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'NUMEXPR_NUM_THREADS'):
+        os.environ[k] = str(n)
+    if os.name == 'nt':
+        import ctypes
+        k32 = _api()[0]
+        k32.GetCurrentProcess.restype = ctypes.c_void_p
+        if not k32.SetProcessAffinityMask(k32.GetCurrentProcess(), (1 << n) - 1):
+            print(f'[{label}] CPU cap NOT set', flush=True)
+            return None
+    print(f'[{label}] CPU: {n} of {os.cpu_count()} cores', flush=True)
+    return n
+
+
 def cap_tree(root, cores, priority='below_normal', seen=None):
     """Below-normal priority + the first `cores` logical cores for every process of the tree not capped yet."""
     import ctypes

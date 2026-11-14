@@ -25,7 +25,12 @@ STEPS = int(os.environ.get('VF_LTX_STEPS', 8))
 def main():
     jobs = json.load(open(sys.argv[1]))
     online = '--online' in sys.argv or os.environ.get('VF_LTX_ONLINE', '1') == '1'
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from vf import thermal
+    # 2026-11-14: prompt encoding on 4 cores spiked the CPU 73 -> 92 C in under 3 s and the guard killed the build
+    thermal.limit_self(os.environ.get('VF_LTX_CORES', '2'), 'ltx')
     import torch
+    torch.set_num_threads(max(1, int(os.environ.get('OMP_NUM_THREADS', '2'))))
     torch.cuda.set_per_process_memory_fraction(0.92, 0)
     sys.path.insert(0, str(WAN2GP))
     os.chdir(WAN2GP)
@@ -39,6 +44,7 @@ def main():
                                                '--perc-reserved-mem-max', '0.2', '--verbose', '0']
     session = init(root=WAN2GP, config_path=cfg, output_dir=work, cli_args=cli)
     for i, j in enumerate(jobs):
+        thermal.wait_cool(log=lambda m: print(m, file=sys.stderr, flush=True), what=f'ltx clip {i + 1}')
         t0 = time.time()
         try:
             n = int(j['frames'])
