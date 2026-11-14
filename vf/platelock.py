@@ -108,9 +108,9 @@ def _frames(src):
 
 def _x264(out, W, H, fps):
     from .render import ffmpeg
+    from .enc import intermediate   # NVENC when the GPU has it (was CPU libx264 always: heat, 2026-11-14)
     return [ffmpeg(), '-y', '-loglevel', 'error', '-threads', '4', '-f', 'rawvideo', '-pix_fmt', 'bgr24',
-            '-s', f'{W}x{H}', '-r', f'{fps:.6f}', '-i', '-', '-c:v', 'libx264', '-crf', '12', '-preset', 'medium',
-            '-pix_fmt', 'yuv420p', '-f', 'mp4', out]
+            '-s', f'{W}x{H}', '-r', f'{fps:.6f}', '-i', '-', *intermediate(), '-f', 'mp4', out]
 
 
 @memo_file('global', '.mp4', version=VERSION)

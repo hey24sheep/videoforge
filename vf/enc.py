@@ -41,6 +41,15 @@ def master(W, H, fps, cq=18, preset='p4'):
     return ['-c:v', 'libx264', '-preset', 'medium', '-crf', str(cq), '-pix_fmt', 'yuv420p'] + rate + color + vui
 
 
+def intermediate():
+    """Near-lossless working clip (plate lock, stamps, face tone): NVENC on the GPU keeps the CPU (and its heat) free;
+    libx264 crf 12 only without NVENC."""
+    if nvenc():
+        return ['-c:v', 'h264_nvenc', '-preset', 'p5', '-tune', 'hq', '-rc', 'vbr', '-cq', '12', '-b:v', '0',
+                '-pix_fmt', 'yuv420p']
+    return ['-c:v', 'libx264', '-crf', '12', '-preset', 'medium', '-pix_fmt', 'yuv420p']
+
+
 def join():
     """Full cut (intro + episode + outro)."""
     if nvenc():
