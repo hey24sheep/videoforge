@@ -373,6 +373,10 @@ def cmd_watch(a):
                     if re.search(rx, raw):
                         hits.append((kind, raw.strip()))
                         break
+            # a FLAG line the build prints again at every stage (cast table, voice report) is reported once per job
+            seen_flags = set(j.get('seen_flags', []))
+            hits = [(k, l) for k, l in hits if k != 'FLAG' or re.sub(r'\s+', ' ', l) not in seen_flags]
+            j['seen_flags'] = sorted(seen_flags | {re.sub(r'\s+', ' ', l) for k, l in hits if k == 'FLAG'})[-500:]
             if hits:   # report EVERY event in the new output (the first version reported one and skipped the rest)
                 j['watch_offset'] = off + len(new.encode('utf-8', 'replace'))
                 _save(j)
