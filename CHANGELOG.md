@@ -1,9 +1,10 @@
 # videoforge changelog
 
 ## Unreleased
-- Thermal guard (`vf/thermal.py`): `vf thermal` shows CPU / GPU / RAM temperatures. jobwatch suspends a job's whole
-  process tree while any sensor is at `VF_TEMP_MAX` (80 °C) or above and resumes it at `VF_TEMP_RESUME` (70 °C);
-  `gpu_lock` waits for a cool machine before a GPU step. `vf status` shows the temperatures; settings in `vf config`.
+- Thermal guard (`vf/thermal.py`), safe for a 45 °C room: jobs run at below-normal priority on half the cores, start
+  only when cool, are throttled from 72 °C, paused at 80 °C (resume at 70 °C), killed at 88 °C or after 20 min over
+  80 °C, and paused when no sensor reads (fail closed). The CPU reading adds an 8 °C margin to the ACPI zone.
+  `vf thermal` shows the temperatures; `vf status` too; settings in `vf config` (group thermal).
 - `gen.ink` styles: `style: engrave` (cut into metal or pressed into paper: groove shading from one light) and `style: emboss` (raised), with `depth` and `light`.
 - `gen.ink` `bake: true`: the text goes into the keyframe the video model animates, so it moves with the prop. The tracked stamp it replaces can drift off a prop that moves (text floats).
 

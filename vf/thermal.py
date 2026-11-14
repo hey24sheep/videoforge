@@ -1,26 +1,30 @@
-"""Thermal guard: CPU, GPU and RAM temperatures must stay under a limit (default 80 C) while videoforge works.
+"""Thermal guard: keep CPU, GPU and RAM under a hard limit (default 80 C) with margin for a hot room (45 C ambient).
 
-    vf thermal                 current temperatures, their sensors, the limit
+    vf thermal                 current temperatures, their sensors, the limits
     vf thermal --watch [SEC]   refresh until Ctrl+C
     vf thermal --json
 
-Two guards use it:
-  * tools/jobwatch.py run: the runner polls every VF_TEMP_POLL s. When any sensor reaches VF_TEMP_MAX it SUSPENDS the
-    job's whole process tree (every child: model workers, ffmpeg) and logs `=== THERMAL pause: ...`; it resumes when
-    every sensor is back at VF_TEMP_RESUME or below (`=== THERMAL resume ...`). This stops the heat mid-run, not only
-    between steps. A pause counts against child timeouts (VF_GEN_TIMEOUT), so long pauses can time a model run out.
-  * gpu_lock (vf/gpulock.py): a step that takes the GPU first waits until the machine is cool (runs outside jobwatch too).
+Layers (tools/jobwatch.py runs every job under `Guard`; settings in `vf config`, group `thermal`):
+  1. load caps     the job's whole process tree runs at below-normal priority on VF_CPU_CORES logical cores (default
+                   half), so the CPU never runs flat out. Re-applied every poll, so new children get it too.
+  2. cool start    a job starts only when every sensor is at or below VF_TEMP_RESUME.
+  3. soft limit    from VF_TEMP_SOFT (72 C) the tree is duty-cycled: suspended for a rest that grows from 0 to 100 %
+                   of each poll period as the temperature climbs to the hard limit. Logged as `[thermal] throttle`.
+  4. hard limit    at VF_TEMP_MAX (80 C) the tree is suspended until every sensor is at or below VF_TEMP_RESUME (70 C):
+                   `=== THERMAL pause` / `=== THERMAL resume` (a jobwatch watch event).
+  5. emergency     at VF_TEMP_CRIT (88 C), or over VF_TEMP_MAX for VF_TEMP_HOT_MIN minutes while paused, the tree is
+                   killed: `=== THERMAL KILL` (jobwatch reports FAILED with the cause; builds are cached, rerun when cool).
+  6. fail closed   when no sensor can be read for VF_TEMP_BLIND polls in a row, the tree is paused until one reads again.
+gpu_lock (vf/gpulock.py) also waits for a cool machine (below VF_TEMP_SOFT) before a GPU step, so runs outside jobwatch
+are covered between steps.
 
 Sensors (Windows, no admin rights):
   gpu   nvidia-smi temperature.gpu (and the VRAM temperature when the card reports it)
-  cpu   the ACPI thermal zones (Win32_PerfFormattedData_Counters_ThermalZoneInformation). On laptops this is the
-        board/CPU zone, not the exact core temperature: it reads lower than the core under load.
-  ram   no sensor without a driver. Exact CPU core and RAM (DIMM) temperatures: run LibreHardwareMonitor with its
-        web server on (Options > Remote Web Server, port 8085); VF_TEMP_LHM (default http://localhost:8085/data.json)
-        is read when it answers and replaces the ACPI zone.
-A sensor that cannot be read is reported as missing, never as cool.
-
-Settings (vf config): VF_THERMAL (1 = on), VF_TEMP_MAX (80), VF_TEMP_RESUME (70), VF_TEMP_POLL (10 s).
+  cpu   the ACPI thermal zone + VF_TEMP_CPU_OFFSET (default 8 C): the zone reads lower than the cores under load, so it
+        is shifted up to stay on the safe side (UNVERIFIED margin: no core sensor to calibrate against without admin)
+  ram   no sensor without a driver. Exact CPU core and DIMM temperatures: run LibreHardwareMonitor with its web server on
+        (port 8085); VF_TEMP_LHM is read when it answers and replaces the ACPI zone (no offset).
+Nothing here changes system, power or driver settings: it only slows, pauses or stops videoforge's own processes.
 Standard library only: the runner and the gen venvs import it.
 """
 import json, os, re, subprocess, sys, time, urllib.request
@@ -29,10 +33,17 @@ NO_WINDOW = 0x08000000 if os.name == 'nt' else 0
 
 
 def limits():
-    mx = float(os.environ.get('VF_TEMP_MAX', 80))
-    return dict(on=os.environ.get('VF_THERMAL', '1') != '0', max=mx,
-                resume=min(float(os.environ.get('VF_TEMP_RESUME', 70)), mx - 1),
-                poll=max(2.0, float(os.environ.get('VF_TEMP_POLL', 10))))
+    e = os.environ.get
+    mx = float(e('VF_TEMP_MAX', 80))
+    soft = min(float(e('VF_TEMP_SOFT', 72)), mx - 1)
+    cores = os.cpu_count() or 2
+    return dict(on=e('VF_THERMAL', '1') != '0', max=mx, soft=soft,
+                resume=min(float(e('VF_TEMP_RESUME', 70)), soft),
+                crit=max(float(e('VF_TEMP_CRIT', 88)), mx + 1), hot_min=float(e('VF_TEMP_HOT_MIN', 20)),
+                poll=max(2.0, float(e('VF_TEMP_POLL', 10))), blind=int(e('VF_TEMP_BLIND', 3)),
+                cpu_offset=float(e('VF_TEMP_CPU_OFFSET', 8)),
+                cores=max(1, min(cores, int(e('VF_CPU_CORES', 0)) or cores // 2)),
+                priority=e('VF_JOB_PRIORITY', 'below_normal'))
 
 
 def _run(argv, timeout=15):
@@ -59,7 +70,7 @@ def _gpu():
     return out
 
 
-def _acpi_cpu():
+def _acpi_cpu(offset):
     ps = ('Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation | '
           'ForEach-Object { "$($_.Name)=$($_.HighPrecisionTemperature)" }')
     vals = []
@@ -67,7 +78,9 @@ def _acpi_cpu():
         m = re.match(r'(.+)=(\d+)$', line.strip())
         if m and int(m.group(2)) > 0:
             vals.append(int(m.group(2)) / 10.0 - 273.15)   # tenths of a kelvin
-    return {'cpu': (round(max(vals), 1), 'ACPI thermal zone (board/CPU, not the core)')} if vals else {}
+    if not vals:
+        return {}
+    return {'cpu': (round(max(vals) + offset, 1), f'ACPI thermal zone {max(vals):.0f} C + {offset:g} C margin')}
 
 
 def _lhm():
@@ -98,13 +111,17 @@ def _lhm():
 
 
 def read():
-    """{sensor: (celsius, source)}; sensors that cannot be read are absent."""
+    """{sensor: (celsius, source)}; sensors that cannot be read are absent. CPU includes the safety margin."""
     t = _gpu()
     lhm = _lhm()
     if 'cpu' not in lhm:
-        t.update(_acpi_cpu())
+        t.update(_acpi_cpu(limits()['cpu_offset']))
     t.update(lhm)
     return t
+
+
+def hottest(temps):
+    return max((v[0] for v in temps.values()), default=None)
 
 
 def hot(temps=None, limit=None):
@@ -118,23 +135,23 @@ def describe(temps):
     return ', '.join(f'{k} {v[0]:.0f} C' for k, v in sorted(temps.items())) or 'no sensors'
 
 
-def wait_cool(log=None, what=''):
-    """Block while any sensor is at/above VF_TEMP_MAX, until all are at/below VF_TEMP_RESUME. Returns seconds waited."""
+def wait_cool(log=None, what='', start_at=None):
+    """Block while any sensor is at/above `start_at` (default VF_TEMP_SOFT), or while no sensor reads, until every
+    sensor is at/below VF_TEMP_RESUME. Returns seconds waited."""
     L = limits()
     if not L['on']:
         return 0.0
     log = log or (lambda s: print(s, file=sys.stderr, flush=True))
+    gate = L['soft'] if start_at is None else start_at
     t = read()
-    h = hot(t, L['max'])
-    if not h:
+    if t and not hot(t, gate):
         return 0.0
-    t0 = time.time()
-    log(f"[thermal] {what or 'next step'} waits: {describe(t)} (limit {L['max']:.0f} C, resume at {L['resume']:.0f} C)")
-    last = t0
+    t0 = last = time.time()
+    log(f"[thermal] {what or 'next step'} waits: {describe(t)} (start below {gate:.0f} C, resume at {L['resume']:.0f} C)")
     while True:
         time.sleep(L['poll'])
         t = read()
-        if not hot(t, L['resume'] + 1e-6):
+        if t and not hot(t, L['resume'] + 1e-6):
             log(f"[thermal] cool again after {time.time() - t0:.0f} s: {describe(t)}")
             return time.time() - t0
         if time.time() - last > 300:
@@ -142,7 +159,7 @@ def wait_cool(log=None, what=''):
             last = time.time()
 
 
-# ---------------------------------------------------------------- suspend / resume a process tree (Windows)
+# ---------------------------------------------------------------- process tree control (Windows)
 def _tree(root):
     """root pid and all its descendants (Toolhelp snapshot; works for DETACHED children, they keep their parent id)."""
     import ctypes
@@ -162,7 +179,8 @@ def _tree(root):
         e.dwSize = ctypes.sizeof(PE)
         ok = k32.Process32First(snap, ctypes.byref(e))
         while ok:
-            kids.setdefault(e.th32ParentProcessID, []).append(e.th32ProcessID)
+            if e.th32ProcessID != e.th32ParentProcessID:
+                kids.setdefault(e.th32ParentProcessID, []).append(e.th32ProcessID)
             ok = k32.Process32Next(snap, ctypes.byref(e))
     finally:
         k32.CloseHandle(snap)
@@ -176,64 +194,160 @@ def _tree(root):
     return out
 
 
-def _nt(pids, fn):
+def _each(pids, access, fn):
     import ctypes
-    k32, nt = ctypes.windll.kernel32, ctypes.windll.ntdll
+    k32 = ctypes.windll.kernel32
     done = []
     for pid in pids:
-        h = k32.OpenProcess(0x0800, False, int(pid))   # PROCESS_SUSPEND_RESUME
+        h = k32.OpenProcess(access, False, int(pid))
         if h:
-            if getattr(nt, fn)(h) == 0:
-                done.append(pid)
-            k32.CloseHandle(h)
+            try:
+                if fn(h):
+                    done.append(pid)
+            finally:
+                k32.CloseHandle(h)
     return done
 
 
 def suspend_tree(root):
-    return _nt(_tree(root), 'NtSuspendProcess')
+    import ctypes
+    return _each(_tree(root), 0x0800, lambda h: ctypes.windll.ntdll.NtSuspendProcess(h) == 0)
 
 
 def resume_tree(pids):
-    return _nt(pids, 'NtResumeProcess')
+    import ctypes
+    return _each(pids, 0x0800, lambda h: ctypes.windll.ntdll.NtResumeProcess(h) == 0)
+
+
+def kill_tree(root):
+    import ctypes
+    return _each(list(reversed(_tree(root))), 0x0001, lambda h: ctypes.windll.kernel32.TerminateProcess(h, 99) != 0)
+
+
+PRIORITY = {'idle': 0x40, 'below_normal': 0x4000, 'normal': 0x20}
+
+
+def cap_tree(root, cores, priority='below_normal', seen=None):
+    """Below-normal priority + the first `cores` logical cores for every process of the tree not capped yet."""
+    import ctypes
+    k32 = ctypes.windll.kernel32
+    mask = (1 << cores) - 1
+    pri = PRIORITY.get(priority, 0x4000)
+    seen = set() if seen is None else seen
+    new = [p for p in _tree(root) if p not in seen]
+
+    def cap(h):
+        k32.SetPriorityClass(h, pri)
+        k32.SetProcessAffinityMask(h, ctypes.c_size_t(mask))
+        return True
+    done = _each(new, 0x0200 | 0x0400, cap)   # PROCESS_SET_INFORMATION | PROCESS_QUERY_INFORMATION
+    seen.update(new)
+    return done
 
 
 class Guard:
-    """Background thread for tools/jobwatch.py: suspend the job's process tree while too hot."""
+    """Background thread for tools/jobwatch.py: load caps, soft throttle, hard pause, emergency kill, fail closed."""
 
     def __init__(self, pid, log):
         import threading
-        self.pid, self.log, self.paused, self.stop = pid, log, None, threading.Event()
+        self.pid, self.log, self.stop = pid, log, threading.Event()
+        self.paused = None          # (since, pids, reason)
+        self.over_since = None      # first time over the hard limit in this pause
+        self.blind = 0
+        self.capped = set()
+        self.killed = None
         self.th = threading.Thread(target=self._loop, daemon=True)
 
     def start(self):
-        if limits()['on'] and os.name == 'nt':
+        L = limits()
+        if L['on'] and os.name == 'nt':
+            try:
+                cap_tree(self.pid, L['cores'], L['priority'], self.capped)
+                self.log(f"[thermal] guard on: {L['cores']} of {os.cpu_count()} cores, {L['priority']} priority; "
+                         f"throttle from {L['soft']:.0f} C, pause at {L['max']:.0f} C, resume at {L['resume']:.0f} C, "
+                         f"kill at {L['crit']:.0f} C or {L['hot_min']:.0f} min over {L['max']:.0f} C")
+            except Exception as e:
+                self.log(f'[thermal] load caps failed: {e}')
             self.th.start()
         return self
 
+    def _pause(self, reason):
+        pids = suspend_tree(self.pid)
+        self.paused = (time.time(), pids, reason)
+        self.log(f"=== THERMAL pause: {reason}; {len(pids)} process(es) suspended")
+
+    def _resume(self, t):
+        since, pids, _ = self.paused
+        resume_tree(pids)
+        self.paused, self.over_since = None, None
+        self.log(f"=== THERMAL resume after {time.time() - since:.0f} s: {describe(t)}")
+
     def _loop(self):
-        t_last = 0.0
-        while not self.stop.wait(limits()['poll']):
+        last_note = throttle_s = 0.0
+        while not self.stop.is_set():
             L = limits()
+            try:
+                cap_tree(self.pid, L['cores'], L['priority'], self.capped)
+            except Exception:
+                pass
             try:
                 t = read()
             except Exception:
+                t = {}
+            hi = hottest(t)
+            now = time.time()
+            # 6. fail closed: no sensor -> pause until one reads again
+            if hi is None:
+                self.blind += 1
+                if self.blind >= L['blind'] and self.paused is None:
+                    self._pause(f"no temperature sensor readable for {self.blind} polls (fail closed)")
+                self.stop.wait(L['poll'])
                 continue
-            if self.paused is None:
-                h = hot(t, L['max'])
-                if h:
-                    pids = suspend_tree(self.pid)
-                    self.paused = (time.time(), pids)
-                    t_last = time.time()
-                    self.log(f"=== THERMAL pause: {', '.join(f'{k} {c:.0f} C' for k, c in h)} >= {L['max']:.0f} C "
-                             f"({describe(t)}); {len(pids)} process(es) suspended until <= {L['resume']:.0f} C")
-            elif not hot(t, L['resume'] + 1e-6):
-                t0, pids = self.paused
+            self.blind = 0
+            # 5. emergency kill
+            if hi >= L['crit'] or (self.over_since and now - self.over_since > L['hot_min'] * 60):
+                why = (f"{describe(t)} >= {L['crit']:.0f} C" if hi >= L['crit'] else
+                       f"over {L['max']:.0f} C for {(now - self.over_since) / 60:.1f} min while paused ({describe(t)})")
+                if self.paused:
+                    resume_tree(self.paused[1])   # a suspended process cannot die cleanly on every Windows build
+                n = kill_tree(self.pid)
+                self.killed = why
+                self.log(f"=== THERMAL KILL: {why}; {len(n)} process(es) stopped. Let the machine cool, then rerun "
+                         f"(builds are cached)")
+                return
+            if self.paused:
+                last_note = max(last_note, self.paused[0])
+                if hi >= L['max'] and self.over_since is None:
+                    self.over_since = now
+                if hi <= L['resume']:
+                    self._resume(t)
+                elif now - last_note > 300:
+                    last_note = now
+                    self.log(f"=== THERMAL still paused ({now - self.paused[0]:.0f} s): {describe(t)}")
+                self.stop.wait(L['poll'])
+                continue
+            # 4. hard limit
+            if hi >= L['max']:
+                self.over_since = now
+                self._pause(f"{', '.join(f'{k} {c:.0f} C' for k, c in hot(t, L['max']))} >= {L['max']:.0f} C "
+                            f"({describe(t)}), resume at {L['resume']:.0f} C")
+                self.stop.wait(L['poll'])
+                continue
+            # 3. soft limit: duty cycle, rest share grows from 0 to 1 between soft and max
+            if hi >= L['soft']:
+                share = min(1.0, (hi - L['soft']) / max(1.0, L['max'] - L['soft']) + 0.2)
+                rest = L['poll'] * share
+                pids = suspend_tree(self.pid)
+                self.stop.wait(rest)
                 resume_tree(pids)
-                self.paused = None
-                self.log(f"=== THERMAL resume after {time.time() - t0:.0f} s: {describe(t)}")
-            elif time.time() - t_last > 300:
-                t_last = time.time()
-                self.log(f"=== THERMAL still paused ({time.time() - self.paused[0]:.0f} s): {describe(t)}")
+                throttle_s += rest
+                if now - last_note > 120:
+                    last_note = now
+                    self.log(f"[thermal] throttle: {describe(t)}, resting {share * 100:.0f} % "
+                             f"({throttle_s:.0f} s of rest so far)")
+                self.stop.wait(L['poll'] - rest)
+                continue
+            self.stop.wait(L['poll'])
 
     def close(self):
         self.stop.set()
@@ -244,7 +358,7 @@ class Guard:
 
 def main(argv=None):
     import argparse
-    ap = argparse.ArgumentParser(prog='vf thermal', description='CPU / GPU / RAM temperatures and the thermal limit')
+    ap = argparse.ArgumentParser(prog='vf thermal', description='CPU / GPU / RAM temperatures and the thermal limits')
     ap.add_argument('--watch', nargs='?', type=float, const=5, default=None, metavar='SECONDS')
     ap.add_argument('--json', action='store_true')
     a = ap.parse_args(argv)
@@ -253,15 +367,16 @@ def main(argv=None):
         if a.json:
             print(json.dumps(dict(limits=L, temps={k: dict(c=v[0], source=v[1]) for k, v in t.items()}), indent=1))
             return 0
-        print(f"thermal guard {'on' if L['on'] else 'OFF'}: pause at {L['max']:.0f} C, resume at {L['resume']:.0f} C")
+        print(f"thermal guard {'on' if L['on'] else 'OFF'}: throttle {L['soft']:.0f} C, pause {L['max']:.0f} C, "
+              f"resume {L['resume']:.0f} C, kill {L['crit']:.0f} C; jobs use {L['cores']} of {os.cpu_count()} cores")
         for k in ('cpu', 'gpu', 'vram', 'ram'):
             if k in t:
                 c, src = t[k]
-                flag = 'HOT ' if c >= L['max'] else 'ok  '
-                print(f'  {flag}{k:5s} {c:5.1f} C   {src}')
+                flag = 'HOT ' if c >= L['max'] else 'warm' if c >= L['soft'] else 'ok  '
+                print(f'  {flag} {k:5s} {c:5.1f} C   {src}')
             elif k in ('cpu', 'gpu', 'ram'):
-                print(f'  --  {k:5s}   n/a    no readable sensor' + (' (LibreHardwareMonitor web server gives RAM)'
-                                                                      if k == 'ram' else ''))
+                print(f'  --   {k:5s}   n/a    no readable sensor' + (' (LibreHardwareMonitor web server gives RAM)'
+                                                                       if k == 'ram' else ''))
         if a.watch is None:
             return 1 if hot(t, L['max']) else 0
         time.sleep(a.watch)

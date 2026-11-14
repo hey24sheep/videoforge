@@ -52,6 +52,8 @@ CAUSES = [
      'check nvidia-smi for other GPU users, then rerun'),
     (r'\[talk\] ABORT', 'talk_video RAM guard aborted the InfiniteTalk run', True,
      'check what else holds RAM (gen worker, other python), then rerun'),
+    (r'=== THERMAL KILL', 'thermal emergency stop (too hot, or no working thermal guard)', True,
+     'let the machine cool (vf thermal), improve airflow, then rerun: finished work is cached'),
     (r'TimeoutExpired', 'a child process timed out', False, 'read the log: a model run hung; check GPU temp/driver'),
     (r'K6 encode pass failed|k6 encode pass failed', 'K6 prompt-encode pass failed', False, 'read the log above it'),
 ]
@@ -144,19 +146,33 @@ def cmd_runner(a):
     with open(job['log'], 'ab') as out:
         out.write(f"\n=== jobwatch start {time.strftime('%Y-%m-%d %H:%M:%S')}: {' '.join(job['argv'])}\n".encode())
         out.flush()
-        p = subprocess.Popen(job['argv'], cwd=job['cwd'], env=env, stdin=subprocess.DEVNULL, stdout=out,
-                             stderr=subprocess.STDOUT)
-        job.update(pid=p.pid, status='running')
-        _save(job)
 
         def note(s):
             out.write(('\n' + s + '\n').encode())
             out.flush()
+        # thermal guard (vf/thermal.py): load caps, throttle, pause, emergency kill. Fail closed: no guard, no job
+        # (unless VF_THERMAL=0 says so on purpose).
+        thermal = None
+        if os.environ.get('VF_THERMAL', '1') != '0':
+            try:
+                thermal = _vf_module('thermal')
+            except Exception as e:
+                note(f'=== THERMAL KILL: guard could not load ({e}); job not started (VF_THERMAL=0 runs unguarded)')
+                job.update(rc=98, ended=time.time(), status='failed')
+                _save(job)
+                return
+            thermal.wait_cool(log=note, what='job start')   # 2. start only on a cool machine
+        p = subprocess.Popen(job['argv'], cwd=job['cwd'], env=env, stdin=subprocess.DEVNULL, stdout=out,
+                             stderr=subprocess.STDOUT)
+        job.update(pid=p.pid, status='running')
+        _save(job)
         guard = None
-        try:   # thermal guard (vf/thermal.py): suspend the whole job tree while CPU/GPU/RAM >= VF_TEMP_MAX
-            guard = _vf_module('thermal').Guard(p.pid, note).start()
-        except Exception as e:
-            note(f'=== THERMAL guard not running: {e}')
+        if thermal:
+            try:
+                guard = thermal.Guard(p.pid, note).start()
+            except Exception as e:   # fail closed: an unguarded job is stopped
+                note(f'=== THERMAL KILL: guard failed to start ({e}); job stopped')
+                p.kill()
         try:
             rc = p.wait()
         finally:

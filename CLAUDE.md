@@ -180,8 +180,9 @@ In a cloud session (no GPU, no D:/ models): scripts, specs, docs and `python -m 
 - Claude cannot read its own context %; never estimate it. Ask the user to run `/context`.
 
 ## Thermal limit (owner, 2026-11-14): CPU, GPU and RAM must never pass 80 C
-`vf/thermal.py`: jobwatch suspends a job's process tree at VF_TEMP_MAX (80) and resumes at VF_TEMP_RESUME (70); gpu_lock
-waits for a cool machine. `vf thermal` reads the sensors. CPU = ACPI zone (reads low under load); no RAM sensor without
+`vf/thermal.py` (owner: safe for 45 C Delhi summers): jobs get half the cores at below-normal priority, start only when
+cool, throttle from 72, pause at 80 (resume 70), are killed at 88 or after 20 min over 80, pause when no sensor reads
+(fail closed); CPU reading = ACPI zone + 8 C margin. gpu_lock waits for a cool machine. `vf thermal` reads the sensors. CPU = ACPI zone (reads low under load); no RAM sensor without
 LibreHardwareMonitor. Always start long jobs through jobwatch so the guard covers them.
 
 ## Long-process watchdog (user rule, 2026-11-02)
