@@ -137,6 +137,12 @@ def cmd_runner(a):
     job = _load(path)
     env = dict(os.environ)
     env['PYTHONUNBUFFERED'] = '1'
+    try:   # thread pools match the thermal guard's core cap (torch/numpy default to every core and spin on fewer)
+        n = str(_vf_module('thermal').limits()['cores'])
+        for k in ('OMP_NUM_THREADS', 'MKL_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'NUMEXPR_NUM_THREADS'):
+            env.setdefault(k, n)
+    except Exception:
+        pass
     env.update(job.get('env', {}))  # was dict(..., PYTHONUNBUFFERED='1', **env): TypeError when env also set it
     try:   # vf.config.json settings (VF_TEMP_MAX ...) for the thermal guard below; the child applies them itself
         os.environ.update(job.get('env', {}))

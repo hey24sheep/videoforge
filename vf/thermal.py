@@ -5,14 +5,16 @@
     vf thermal --json
 
 Layers (tools/jobwatch.py runs every job under `Guard`; settings in `vf config`, group `thermal`):
-  1. load caps     the job's whole process tree runs at below-normal priority on VF_CPU_CORES logical cores (default
-                   half), so the CPU never runs flat out. Re-applied every poll, so new children get it too.
+  1. load caps     the job's whole process tree runs at below-normal priority on VF_CPU_CORES logical cores (default a
+                   quarter: GPU jobs only feed the card; half let one talk run spike the CPU 69 -> 88 C in 2 s), and the
+                   runner sets OMP/MKL/torch thread counts to match, so the CPU never runs flat out. Re-applied every poll, so new children get it too.
   2. cool start    a job starts only when every sensor is at or below VF_TEMP_RESUME.
   3. soft limit    from VF_TEMP_SOFT (72 C) the tree is duty-cycled: suspended for a rest that grows from 0 to 100 %
                    of each poll period as the temperature climbs to the hard limit. Logged as `[thermal] throttle`.
   4. hard limit    reads every VF_TEMP_FAST_POLL s (2) once within 6 C of the soft limit, and pauses EARLY when the
                    rise rate would pass VF_TEMP_MAX before the next read. At VF_TEMP_MAX (80 C) the tree is suspended until every sensor is at or below VF_TEMP_RESUME (70 C):
                    `=== THERMAL pause` / `=== THERMAL resume` (a jobwatch watch event).
+                   After a pause the job runs at half speed for VF_TEMP_RECOVER s (60) before full speed.
   5. emergency     at VF_TEMP_CRIT (88 C), or over VF_TEMP_MAX for VF_TEMP_HOT_MIN minutes while paused, the tree is
                    killed: `=== THERMAL KILL` (jobwatch reports FAILED with the cause; builds are cached, rerun when cool).
   6. fail closed   when no sensor can be read for VF_TEMP_BLIND polls in a row, the tree is paused until one reads again.
@@ -43,7 +45,8 @@ def limits():
                 crit=max(float(e('VF_TEMP_CRIT', 88)), mx + 1), hot_min=float(e('VF_TEMP_HOT_MIN', 20)),
                 poll=max(2.0, float(e('VF_TEMP_POLL', 10))), blind=int(e('VF_TEMP_BLIND', 3)),
                 cpu_offset=float(e('VF_TEMP_CPU_OFFSET', 8)),
-                cores=max(1, min(cores, int(e('VF_CPU_CORES', 0)) or cores // 2)),
+                cores=max(2, min(cores, int(e('VF_CPU_CORES', 0)) or cores // 4)),
+                recover=float(e('VF_TEMP_RECOVER', 60)),
                 priority=e('VF_JOB_PRIORITY', 'below_normal'))
 
 
@@ -257,6 +260,7 @@ class Guard:
         self.blind = 0
         self.capped = set()
         self.killed = None
+        self.recover_until = 0.0
         self.th = threading.Thread(target=self._loop, daemon=True)
 
     def start(self):
@@ -281,7 +285,9 @@ class Guard:
         since, pids, _ = self.paused
         resume_tree(pids)
         self.paused, self.over_since = None, None
-        self.log(f"=== THERMAL resume after {time.time() - since:.0f} s: {describe(t)}")
+        self.recover_until = time.time() + limits()['recover']   # come back at half speed, not flat out
+        self.log(f"=== THERMAL resume after {time.time() - since:.0f} s: {describe(t)}; half speed for "
+                 f"{limits()['recover']:.0f} s")
 
     def _loop(self):
         last_note = throttle_s = 0.0
@@ -346,8 +352,10 @@ class Guard:
                 self.stop.wait(poll)
                 continue
             # 3. soft limit: duty cycle, rest share grows from 0 to 1 between soft and max
-            if hi >= L['soft']:
-                share = min(1.0, (hi - L['soft']) / max(1.0, L['max'] - L['soft']) + 0.2)
+            recovering = now < self.recover_until
+            if hi >= L['soft'] or recovering:
+                share = min(1.0, max(0.5 if recovering else 0.0,
+                                     (hi - L['soft']) / max(1.0, L['max'] - L['soft']) + 0.2))
                 rest = poll * share
                 pids = suspend_tree(self.pid)
                 self.stop.wait(rest)
