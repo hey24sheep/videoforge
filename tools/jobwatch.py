@@ -311,7 +311,7 @@ def cmd_restart(a):
 EVENTS = [  # (regex on NEW log lines, kind) - the first match ends `watch` so the session wakes up and acts
     (r'Traceback \(most recent call last\)', 'ERROR'),
     (r'\[talk\] ABORT|ABORT:', 'ABORT'),
-    (r'=== THERMAL', 'THERMAL'),
+    (r'=== THERMAL (KILL|still paused)', 'THERMAL'),   # routine pause/resume lines are not events
     (r'\bFLAG\b', 'FLAG'),
     (r'QC (error|warning)', 'QC'),
     (r'voicedir: acted|talk: \d+ shot\(s\) in|k6: generating|ai stage:|^short: ', 'MILESTONE'),
