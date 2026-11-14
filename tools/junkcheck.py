@@ -63,7 +63,11 @@ def check(repo, files, allow, max_mb, media_only=()):
 
 HOOK = """#!/bin/sh
 # videoforge junk check (owner rule: never push junk). Installed by tools/junkcheck.py --install.
-exec "{py}" "{tool}" --repo "$(git rev-parse --show-toplevel)"{allow}{media}
+"{py}" "{tool}" --repo "$(git rev-parse --show-toplevel)"{allow}{media} || exit 1
+# then Git LFS's own pre-push (it uploads the LFS objects; replacing it broke LFS pushes on 2026-11-14)
+if command -v git-lfs >/dev/null 2>&1; then
+  exec git lfs pre-push "$@"
+fi
 """
 
 
