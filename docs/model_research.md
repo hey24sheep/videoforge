@@ -17,6 +17,22 @@ Licence rule: open weights usable commercially only (Apache-2.0, MIT, or a licen
   cooler, so GPU load heats the CPU sensor. Conclusion: less GPU work helps heat more than fewer cores or less copying.
   UNVERIFIED: no real per-core sensor (the CPU reading is the ACPI zone + 8 C); LibreHardwareMonitor would confirm it.
 
+## Test machine and setup (2026-11-14)
+
+- Laptop: NVIDIA GeForce RTX 4060 Laptop GPU (8 GB, Ada, driver 617.14), AMD Ryzen 9 8945H (16 threads), 31 GB RAM,
+  Windows 11 Home. CPU and GPU share one cooler. The owner's target: safe in a 45 C room.
+- Thermal guard on every run (vf/thermal.py via jobwatch): throttle 72 C, pause 80 C, resume 70 C, kill 88 C.
+- InfiniteTalk baseline: WanGP commit f0b54e0 (2026-11-06), Wan2.1-I2V-14B-480P + InfiniteTalk single, quanto INT8
+  W8A8, lightx2v step-distill LoRA, 4 steps, audio_cfg 2.0, 480x832, 81-frame windows, SageAttention 2.2, offload
+  profile 4 + VF_TALK_PIN 0.2, VF_TALK_CORES 2, torch 2.11.0+cu128. Measured 118-144 s per step including guard pauses.
+- StableAvatar: repo Francis-Rings/StableAvatar at 3862518 (2026-09-25); weights FrancisRing/StableAvatar
+  (StableAvatar-1.3B/transformer3d-square.pt + Wan2.1-Fun-V1.1-1.3B-InP + wav2vec2-base-960h, 23 GB); own venv with
+  torch 2.11.0+cu128, diffusers 0.30.1, transformers 4.51.3, accelerate 1.15.0. Runner: tools/research/stableavatar_8gb.py.
+  480x832, 81 frames, 25 steps, text scale 3.0, audio scale 5.0, seed 79. Weights loaded with `weights_only=True`.
+  Model files, venv and clone were moved to the Recycle Bin afterwards; the repo, Hugging Face id and versions above
+  recreate them.
+- HuMo: repo Phantom-video/HuMo at 845f447 (2026-01-26) read, not run.
+
 ## Ideas
 
 | Date | Idea | Status | Why |
