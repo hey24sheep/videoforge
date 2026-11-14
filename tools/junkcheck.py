@@ -44,13 +44,76 @@ def changed(repo, rng):
 MEDIA = r'\.(png|jpe?g|webp|gif|bmp|tiff?|exr|wav|mp3|flac|ogg|m4a|mp4|mov|mkv|webm|avi|safetensors|ckpt|pt|pth|bin|npy|npz|onnx|gguf)$'
 
 
-def check(repo, files, allow, max_mb, media_only=()):
+CODE = r'\.(ya?ml|py|json)$'   # files whose mention of a media file means a build uses it
+
+
+def referenced(repo):
+    """Basenames of media files named in the repo's tracked yaml / py / json (the build inputs that are used)."""
+    names = set()
+    for p in git(repo, 'ls-files').splitlines():
+        if re.search(CODE, p, re.I):
+            try:
+                txt = open(os.path.join(repo, p), encoding='utf-8', errors='ignore').read()
+            except OSError:
+                continue
+            names.update(m.group(0).lower() for m in re.finditer(r'[\w.\-]+' + MEDIA.replace('$', r'\b'), txt, re.I))
+    return names
+
+
+def broken(full):
+    """Why a media file is unusable (empty, unreadable, no frames), or None. Uses PIL / ffprobe when present."""
+    if not os.path.isfile(full):
+        return None
+    if os.path.getsize(full) == 0:
+        return 'empty file'
+    ext = full.rsplit('.', 1)[-1].lower()
+    head = open(full, 'rb').read(200)
+    if head.startswith(b'version https://git-lfs'):
+        return None   # LFS pointer in the work tree: the object itself is checked where it was made
+    if ext in ('png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff'):
+        try:
+            from PIL import Image
+            with Image.open(full) as im:
+                im.verify()
+        except ImportError:
+            if ext == 'png' and not head.startswith(b'\x89PNG') or ext in ('jpg', 'jpeg') and not head.startswith(b'\xff\xd8'):
+                return 'not a valid image'
+        except Exception as e:
+            return f'broken image ({str(e)[:60]})'
+    elif ext in ('mp4', 'mov', 'mkv', 'webm', 'avi', 'wav', 'mp3', 'flac', 'ogg', 'm4a'):
+        try:
+            r = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', full],
+                               capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        try:
+            if r.returncode != 0 or float(r.stdout.strip() or 0) <= 0:
+                return 'unreadable or zero-length media'
+        except ValueError:
+            return 'unreadable media'
+    return None
+
+
+def check(repo, files, allow, max_mb, media_only=(), use_refs=False):
     bad = []
+    refs = referenced(repo) if use_refs else set()
     for p in files:
+        full = os.path.join(repo, p)
+        is_media = re.search(MEDIA, p, re.I)
+        if is_media:
+            why = broken(full)
+            if why:
+                bad.append((p, why))
+                continue
+        elif os.path.isfile(full) and os.path.getsize(full) == 0 and not re.search(r'(__init__\.py|\.gitkeep)$', p):
+            bad.append((p, 'empty file'))
+            continue
         if any(fnmatch.fnmatch(p, g) for g in allow):
             continue
-        if media_only and re.search(MEDIA, p, re.I) and not any(fnmatch.fnmatch(p, g) for g in media_only):
-            bad.append((p, 'media outside the final-render folders (' + ', '.join(media_only) + ')'))
+        if media_only and is_media and not any(fnmatch.fnmatch(p, g) for g in media_only) \
+                and os.path.basename(p).lower() not in refs:
+            bad.append((p, 'media that is neither a final render (' + ', '.join(media_only) + ')'
+                           + (' nor used by a tracked yaml/py/json' if use_refs else '') + ''))
             continue
         why = next((w for rx, w in JUNK if re.search(rx, p, re.I)), None)
         full = os.path.join(repo, p)
@@ -63,7 +126,7 @@ def check(repo, files, allow, max_mb, media_only=()):
 
 HOOK = """#!/bin/sh
 # videoforge junk check (owner rule: never push junk). Installed by tools/junkcheck.py --install.
-"{py}" "{tool}" --repo "$(git rev-parse --show-toplevel)"{allow}{media} || exit 1
+"{py}" "{tool}" --repo "$(git rev-parse --show-toplevel)"{allow}{media}{refs} || exit 1
 # then Git LFS's own pre-push (it uploads the LFS objects; replacing it broke LFS pushes on 2026-11-14)
 if command -v git-lfs >/dev/null 2>&1; then
   exec git lfs pre-push "$@"
@@ -71,13 +134,14 @@ fi
 """
 
 
-def install(repo, allow, media_only=()):
+def install(repo, allow, media_only=(), use_refs=False):
     hooks = git(repo, 'rev-parse', '--git-path', 'hooks').strip()
     path = os.path.join(repo, hooks, 'pre-push') if not os.path.isabs(hooks) else os.path.join(hooks, 'pre-push')
     allow_args = ''.join(f' --allow "{g}"' for g in allow)
     with open(path, 'w', newline='\n') as f:
         f.write(HOOK.format(py=sys.executable.replace('\\', '/'), tool=os.path.abspath(__file__).replace('\\', '/'),
-                            allow=allow_args, media=''.join(f' --media-only "{g}"' for g in media_only)))
+                            allow=allow_args, media=''.join(f' --media-only "{g}"' for g in media_only),
+                            refs=' --referenced' if use_refs else ''))
     print(f'pre-push hook installed: {path}')
 
 
@@ -90,14 +154,17 @@ def main(argv=None):
     ap.add_argument('--max-mb', type=float, default=25)
     ap.add_argument('--media-only', action='append', default=[], metavar='GLOB',
                     help='images, audio, video and weights are allowed ONLY here (repeatable), e.g. final renders')
+    ap.add_argument('--referenced', action='store_true',
+                    help='with --media-only: also allow media that a tracked yaml/py/json names (build inputs: cast '
+                         'refs, voice refs, source stills)')
     ap.add_argument('--install', action='store_true', help='install as this repo\'s pre-push hook')
     a = ap.parse_args(argv)
     repo = os.path.abspath(a.repo)
     if a.install:
-        install(repo, a.allow, a.media_only)
+        install(repo, a.allow, a.media_only, a.referenced)
         return 0
     files = git(repo, 'ls-files').splitlines() if a.all else changed(repo, a.range)
-    bad = check(repo, files, a.allow, a.max_mb, a.media_only)
+    bad = check(repo, files, a.allow, a.max_mb, a.media_only, a.referenced)
     if not bad:
         print(f'junkcheck: {len(files)} file(s) clean')
         return 0
