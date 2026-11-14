@@ -1,0 +1,60 @@
+# Model research log: talk stage speed and heat
+
+What was looked at to make the talk stage (InfiniteTalk on Wan2.1-I2V-14B) faster and cooler on an 8 GB RTX 4060 laptop
+with 31 GB RAM, when, and why each idea was kept, rejected or left open. Measured results live in
+[model_optimization_plan.md](model_optimization_plan.md) section 6; this file is the research log. Add a row for every
+new idea, with its date and source, before testing it.
+
+Licence rule: open weights usable commercially only (Apache-2.0, MIT, or a licence without a non-commercial clause).
+
+## Why the talk stage is slow and hot (2026-11-14)
+
+- The model is about 17 GB at int8 (14B base + InfiniteTalk module). The card holds about 5 GB of it; the rest is
+  copied from RAM on every one of the 4 steps (about 105 s per step).
+- On 4 cores the CPU sensor reached 80-82 C on every step and 88-89 C at the video decode, so the thermal guard killed
+  two builds.
+- On 2 cores (`VF_TALK_CORES=2`) it still reached 81-83 C with the GPU at 68-69 C. The laptop's CPU and GPU share one
+  cooler, so GPU load heats the CPU sensor. Conclusion: less GPU work helps heat more than fewer cores or less copying.
+  UNVERIFIED: no real per-core sensor (the CPU reading is the ACPI zone + 8 C); LibreHardwareMonitor would confirm it.
+
+## Ideas
+
+| Date | Idea | Status | Why |
+|---|---|---|---|
+| 2026-11-10 | FP8 weights for InfiniteTalk | Rejected | 3.5x the error of WanGP quanto INT8 for about 10 % speed (measured, section 6). |
+| 2026-11-10 | `audio_cfg` 1.0 (half the compute per step) | Drafts only | -42 % time but weaker mouths and lower SyncNet on unseen takes (measured, 6b). |
+| 2026-11-10 | `torch.compile`, BF16 compute | Rejected | No gain on this card (measured, 6b). |
+| 2026-11-10 | MagCache step skipping | Rejected | -45 % time, SyncNet passed, but crushed contrast, green beard cast, blotchy faces: 4 distilled steps leave nothing to skip (measured). |
+| 2026-11-10 | SageAttention 2.2, `--preload 3000`, one model load per build | Kept | -5 % and -4 %, lip-sync unchanged; batch saves 60-90 s per extra talk shot (measured). |
+| 2026-11-14 | GPUDirect Storage / fastsafetensors (disk straight to GPU) | Rejected | Linux only. |
+| 2026-11-14 | DirectStorage on Windows for model weights | Rejected | Only hobby projects, no PyTorch path. |
+| 2026-11-14 | Pinned (page-locked) RAM, WanGP profile 4 + `VF_TALK_PIN=0.2` | Open | The GPU copies pinned blocks by DMA without the CPU. At 0.2 only 11 of 39 blocks fit and free RAM fell to about 5 GB; step time about the same (105 s). Default stays profile 5 until a clean build finishes. |
+| 2026-11-14 | 2 cores for the talk stage + cool wait before decode | Kept | Avoids the 88 C kill at decode. Did not stop 80 C pauses during steps (see above). |
+| 2026-11-14 | GGUF Q4_K_M / Q3_K_M of Wan2.1-I2V-14B-480P (city96) + InfiniteTalk Q4 (Kijai) | Open, low value | 11.3 GB / 8.6 GB + 1.4 GB, about 30 % less than int8, not half. WanGP loads GGUF, but its fast GGUF CUDA kernels (claimed +15 %) have no wheel for Python 3.12 / torch 2.11 (built for py310 torch 2.7.1, py311 torch 2.10 cu130). Without them weights are unpacked slowly: likely same speed or slower. Cuts copying, not GPU math, so little heat gain. One guide reports Q4 visibly worse than Q5 for face consistency. |
+| 2026-11-14 | W4A8 INT8 (4-bit weights, 8-bit math, WanGP) | Blocked | Works on RTX 30/40, but no InfiniteTalk W4A8 file exists and WanGP's `--save-quantized` only writes 8-bit. |
+| 2026-11-14 | NVFP4 / Nunchaku FP4 | Rejected | Needs an RTX 50 card (Blackwell FP4); Ada has none. |
+| 2026-11-14 | Nunchaku / SVDQuant INT4 for Wan | Rejected | No Wan or InfiniteTalk model found. |
+| 2026-11-14 | TalkVerse 5B (Wan2.2-TI2V-5B LoRA, CVPR 2026) | Rejected | Snap Inc. non-commercial licence. |
+| 2026-11-14 | StableAvatar (Wan2.1-1.3B based) | Candidate | Hugging Face card says MIT; supports 480x832. Fits the card whole: no weight streaming, far less GPU work. Quality vs InfiniteTalk 14B unknown: needs a blind A/B on real talk shots. Licence file in the GitHub repo not yet read. |
+| 2026-11-14 | HuMo 1.7B (ByteDance, audio + image + text) | Candidate | Listed as Apache-2.0 by several sites; model card not yet read. Same reasoning as StableAvatar. |
+| 2026-11-14 | OmniAvatar 1.3B | Candidate | On Hugging Face; licence not checked yet. |
+| 2026-11-14 | Persistent talk worker (load the 14B once per session) | Open | Saves the model load (about 90 s) per build, not per-step heat. |
+
+## Next test (when chosen)
+
+Blind A/B on two real talk shots, same keyframe and voice take: InfiniteTalk 14B int8 vs each 1.3B candidate that
+passes the licence check. Measure SyncNet offset and confidence, silent-mouth, face match, s/step, peak CPU and GPU
+temperature, guard pauses; plus a blind Opus frame review. `tools/talk_bench.py` measures speed and heat per setting.
+
+## Sources
+
+- city96 Wan2.1-I2V-14B-480P GGUF: https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf
+- Kijai InfiniteTalk GGUF: https://huggingface.co/Kijai/WanVideo_comfy_GGUF
+- WanGP (GGUF kernels, W4A8, NVFP4 notes in docs/CHANGELOG.md and docs/INSTALLATION.md): https://github.com/deepbeepmeep/WanGP
+- GGUF kernel wheels: https://github.com/deepbeepmeep/kernels/releases/tag/gguf-v1.0.29
+- StableAvatar: https://huggingface.co/FrancisRing/StableAvatar , https://arxiv.org/abs/2508.08248
+- HuMo: https://comfyui-wiki.com/en/models/humo/humo
+- OmniAvatar 1.3B: https://huggingface.co/OmniAvatar/OmniAvatar-1.3B
+- TalkVerse: https://arxiv.org/abs/2512.14938
+- Q3 14B GGUF on 8 GB, same speed (one user report): https://www.reddit.com/r/StableDiffusion/comments/1koefcg/new_wan21vace14bggufs/
+- Wan 2.2 GGUF guide (Q4 vs Q5 faces): https://wan27.org/zh/blog/wan-2-2-gguf-guide

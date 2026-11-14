@@ -292,6 +292,8 @@ video are NOT caveman.
   -42 % but weaker mouths + lower SyncNet on unseen takes: drafts only. compile and BF16 bring nothing. Validate any tuning on unseen takes.
 - InfiniteTalk stays WanGP quanto INT8 W8A8: FP8 measured 3.5x the error for ~10 %. GEMM facts on the 4060: FP8 _scaled_mm
   1.7-2.0x BF16; torch _int_mm 0.8-1.0x; WanGP fused INT8 Triton 1.3x (relerr 0.011).
+- Research log (2026-11-14): docs/model_research.md lists every speed/heat idea tried or found for the talk stage, with date, status and why
+  rejected (GGUF Q4, W4A8, FP4, GPUDirect, smaller 1.3B talk models). Add a row before testing a new one.
 - Precision A/B toolkit: `tools/precision/` (gemm_bench.py = matmul speed/error per precision; dump_jobs.py = an episode's
   K6/Klein jobs without generating; ab_compare.py = SSIM/PSNR vs the bf16 reference + sheet). Evidence is kept with the private test series.
   Rule: A/B vs the model's own BF16 output, same seed, and look.

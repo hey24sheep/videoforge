@@ -18,3 +18,4 @@
 - [Owner viewer desync](owner-viewer-desync.md) — owner's app viewer plays audio ~1 s early; review sync in native player/PC
 - [Script gate: viewer test](script-gate-viewer-test.md) — blind viewer-transcript critics both >= 7; lock facts first; VO required
 - [Never stop other sessions](never-stop-other-sessions.md) — only stop my own tasks; other sessions are off limits
+- [Talk model research](talk-model-research.md) — docs/model_research.md log: dated ideas, status, why rejected; add a row before testing
