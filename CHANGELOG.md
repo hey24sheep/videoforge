@@ -1,6 +1,8 @@
 # videoforge changelog
 
 ## Unreleased
+- `tools/junkcheck.py`: blocks a push that adds junk (logs, review sheets, critic files, episode build output, build
+  snapshots, test files, local settings, media over 25 MB outside allowed folders). `--install` makes it the pre-push hook.
 - Thermal guard (`vf/thermal.py`), safe for a 45 °C room: jobs run at below-normal priority on half the cores, start
   only when cool, are throttled from 72 °C, paused at 80 °C (resume at 70 °C), killed at 88 °C or after 20 min over
   80 °C, and paused when no sensor reads (fail closed). The CPU reading adds an 8 °C margin to the ACPI zone.
