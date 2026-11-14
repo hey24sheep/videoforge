@@ -213,8 +213,11 @@ def main():
     ap.add_argument("--trim-tail", type=float, default=None,
                     help="cut the clip this many seconds after the speech ends (InfiniteTalk keeps the mouth moving "
                          "in trailing silence, 2026-11-07); cover the silence with another shot")
-    ap.add_argument("--profile", default="5", help="WanGP/mmgp offload profile: 5 = no reserved RAM, weights memory-mapped "
-                    "(default; profile 4 pins ~10 GB and drove free RAM to 2.4 GB on this 31 GB laptop)")
+    ap.add_argument("--profile", default=os.environ.get("VF_TALK_PROFILE", "5"), help="WanGP/mmgp offload profile: 5 = no reserved RAM, weights memory-mapped "
+                    "(default; profile 4 pins part of the transformer in page-locked RAM, capped by --pin: the GPU copies those blocks by "
+                    "DMA without the CPU; uncapped it pinned ~10 GB and drove free RAM to 2.4 GB on this 31 GB laptop)")
+    ap.add_argument("--pin", type=float, default=float(os.environ.get("VF_TALK_PIN", 0.2)),
+                    help="share of system RAM mmgp may pin (page-locked) for the model (WanGP --perc-reserved-mem-max)")
     ap.add_argument("--max-ram", default="16", help="WanGP RAM planning budget in GB (--max-ram)")
     ap.add_argument("--ws-cap", type=float, default=0, help="hard working-set cap in GB (default 9: kept free RAM >= 7 GB in the 2026-11-07 test; 16 let it fall to 0.2 GB)")
     ap.add_argument("--attention", default="auto", help="auto = sage2 when SageAttention 2.x is installed (2026-11-10), else sage; or sdpa")
@@ -268,7 +271,7 @@ def main():
     sampler = GpuSampler()
     sampler.start()
     cli = ["--offline", "--attention", args.attention, "--profile", str(args.profile),
-           "--vram-allocator", "default", "--perc-reserved-mem-max", "0.2", "--max-ram", str(args.max_ram), "--preload", str(args.preload),
+           "--vram-allocator", "default", "--perc-reserved-mem-max", str(args.pin), "--max-ram", str(args.max_ram), "--preload", str(args.preload),
            "--verbose", "1"] + (["--compile"] if args.compile else [])
     t_init = time.time()
     cfg = CFG

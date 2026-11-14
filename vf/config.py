@@ -5,6 +5,8 @@
     vf config set VF_ENCODER cpu  save to vf.config.json (repo root, not committed)
     vf config unset VF_ENCODER    remove from the file
     vf config --json              machine-readable
+    vf config export [FILE]       every setting's current value to FILE (default vf.settings.json)
+    vf config import FILE         load an exported file (values that differ from the defaults go to vf.config.json)
 
 Order: a real environment variable wins, then vf.config.json, then the default in the code. `apply()` runs in
 vf/__init__.py, before any module reads its variable, and every child process inherits the result.
@@ -56,6 +58,10 @@ SETTINGS = [
     ('VF_TEMP_POLL', '10', 'thermal', 'seconds between temperature reads while cool'),
     ('VF_TEMP_FAST_POLL', '2', 'thermal', 'seconds between reads once warm (rise rate triggers an early pause)'),
     ('VF_TEMP_LHM', 'http://localhost:8085/data.json', 'thermal', 'LibreHardwareMonitor web server: exact CPU core + RAM temps'),
+    ('VF_ARCHIVE', '1', 'output', '0 = vf cut skips the episode archive (voices, keyframes, refs, lock.json)'),
+    ('VF_TALK_PROFILE', '5', 'models', 'InfiniteTalk offload profile: 5 = nothing pinned, 4 = part pinned in RAM (DMA)'),
+    ('VF_TALK_PIN', '0.2', 'models', 'share of RAM the talk model may pin (profile 4)'),
+    ('VF_TALK_PRELOAD', '3000', 'models', 'MB of the talk model kept in VRAM'),
     ('VF_GEN_PERSIST', '1', 'worker', '0 = one-shot model processes instead of the warm worker'),
     ('VF_GEN_PORT', '47219', 'worker', 'port of the warm gen worker'),
     ('VF_GEN_IDLE', '600', 'worker', 'seconds before an idle gen worker exits'),
@@ -117,7 +123,7 @@ def rows():
 def main(argv):
     import argparse
     ap = argparse.ArgumentParser(prog='vf config', description=__doc__.split('\n\n')[0])
-    ap.add_argument('action', nargs='?', default='show', choices=['show', 'get', 'set', 'unset', 'path'])
+    ap.add_argument('action', nargs='?', default='show', choices=['show', 'get', 'set', 'unset', 'path', 'export', 'import'])
     ap.add_argument('name', nargs='?')
     ap.add_argument('value', nargs='?')
     ap.add_argument('--json', action='store_true', help='print the table as JSON')
@@ -126,6 +132,25 @@ def main(argv):
     from . import ui
     if a.action == 'path':
         print(FILE)
+        return 0
+    if a.action == 'export':   # every setting with its current value (env > file > default): a machine's whole setup
+        dst = a.name or 'vf.settings.json'
+        json.dump({n: v for n, v, s, d, g, h in rows()}, open(dst, 'w', encoding='utf-8'), indent=1, sort_keys=True)
+        ui.ok(f'{len(rows())} settings exported to {os.path.abspath(dst)}')
+        return 0
+    if a.action == 'import':   # values that differ from the code default go into vf.config.json
+        if not a.name:
+            ap.error('import needs a file, e.g. vf config import vf.settings.json')
+        src = json.load(open(a.name, encoding='utf-8'))
+        defaults = {s[0]: s[1] for s in SETTINGS}
+        d = load_file()
+        n = 0
+        for k, v in src.items():
+            if str(v) != str(defaults.get(k)):
+                d[k] = str(v)
+                n += 1
+        _save(d)
+        ui.ok(f'{n} setting(s) imported into {os.path.basename(FILE)} (the rest match the defaults)')
         return 0
     if a.action in ('get', 'set', 'unset'):
         if not a.name:

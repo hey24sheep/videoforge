@@ -148,4 +148,11 @@ def cut(episode_yaml, skip_build=False, no_check=False, phone_mb=28.0, log=print
     log(f'[cut] {"PASS" if ok else "CHECK BLOCKED"}: {full} ({dur:.1f} s); phone {phone} ({mb:.1f} MB at {kbps} kb/s)')
     if mb > phone_mb + 1.5:
         log(f'[cut] WARN phone copy {mb:.1f} MB > {phone_mb} MB')
-    return dict(full=full, phone=phone, ok=ok, mb=mb, dur=dur)
+    arch = None
+    if ok and os.environ.get('VF_ARCHIVE', '1') != '0':   # every passed release keeps its rebuild record (vf/archive.py)
+        try:
+            from .archive import archive
+            arch = archive(episode_yaml, log=log)
+        except BaseException as e:   # never fail a release on the record; say so
+            log(f'[cut] WARN archive not written: {e}')
+    return dict(full=full, phone=phone, ok=ok, mb=mb, dur=dur, archive=arch)

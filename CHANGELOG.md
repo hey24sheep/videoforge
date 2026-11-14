@@ -1,6 +1,8 @@
 # videoforge changelog
 
 ## Unreleased
+- `vf cut` writes the archive automatically after a passed release (`VF_ARCHIVE=0` to skip). `vf config export` /
+  `vf config import` save and restore every setting.
 - `vf archive <episode.yaml>`: keeps the kept voice take of every line, voice refs, every shot's keyframe, cast refs and
   lock.json (voice settings, seeds, prompts, kept takes, VF_* settings, videoforge commit) in `<episode>/archive/`, so a
   lost render can be remade with the same people and voices. Every build now writes `out/shots.json` for it.
