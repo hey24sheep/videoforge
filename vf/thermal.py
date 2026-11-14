@@ -201,9 +201,34 @@ def _tree(root):
     return out
 
 
+_API = None
+
+
+def _api():
+    """kernel32 / ntdll with 64-bit handle types. Without argtypes ctypes passes a HANDLE as a 32-bit int: a resume
+    could silently fail and leave a job suspended with the GPU idle (2026-11-14: 29 of 31 talk threads stayed
+    suspended after a pause)."""
+    global _API
+    if _API is None:
+        import ctypes
+        from ctypes import wintypes
+        k32, nt = ctypes.windll.kernel32, ctypes.windll.ntdll
+        k32.OpenProcess.restype = wintypes.HANDLE
+        k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        k32.CloseHandle.argtypes = [wintypes.HANDLE]
+        k32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+        k32.SetPriorityClass.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        k32.SetProcessAffinityMask.argtypes = [wintypes.HANDLE, ctypes.c_size_t]
+        k32.GetProcessAffinityMask.argtypes = [wintypes.HANDLE, ctypes.POINTER(ctypes.c_size_t),
+                                               ctypes.POINTER(ctypes.c_size_t)]
+        for f in (nt.NtSuspendProcess, nt.NtResumeProcess):
+            f.argtypes, f.restype = [wintypes.HANDLE], ctypes.c_long
+        _API = (k32, nt)
+    return _API
+
+
 def _each(pids, access, fn):
-    import ctypes
-    k32 = ctypes.windll.kernel32
+    k32 = _api()[0]
     done = []
     for pid in pids:
         h = k32.OpenProcess(access, False, int(pid))
@@ -217,18 +242,36 @@ def _each(pids, access, fn):
 
 
 def suspend_tree(root):
-    import ctypes
-    return _each(_tree(root), 0x0800, lambda h: ctypes.windll.ntdll.NtSuspendProcess(h) == 0)
+    return _each(_tree(root), 0x0800, lambda h: _api()[1].NtSuspendProcess(h) == 0)
 
 
-def resume_tree(pids):
-    import ctypes
-    return _each(pids, 0x0800, lambda h: ctypes.windll.ntdll.NtResumeProcess(h) == 0)
+def resume_tree(pids, log=None):
+    """Resume every pid suspend_tree returned; retry a failed one, and say which could not be resumed."""
+    pids = list(pids)
+    done = _each(pids, 0x0800, lambda h: _api()[1].NtResumeProcess(h) == 0)
+    for _ in range(3):
+        left = [p for p in pids if p not in done and _alive(p)]
+        if not left:
+            break
+        time.sleep(0.2)
+        done += _each(left, 0x0800, lambda h: _api()[1].NtResumeProcess(h) == 0)
+    left = [p for p in pids if p not in done and _alive(p)]
+    if left and log:
+        log(f'=== THERMAL resume FAILED for pid(s) {left}: the job may stay suspended')
+    return done
+
+
+def _alive(pid):
+    k32 = _api()[0]
+    h = k32.OpenProcess(0x1000, False, int(pid))   # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return False
+    k32.CloseHandle(h)
+    return True
 
 
 def kill_tree(root):
-    import ctypes
-    return _each(list(reversed(_tree(root))), 0x0001, lambda h: ctypes.windll.kernel32.TerminateProcess(h, 99) != 0)
+    return _each(list(reversed(_tree(root))), 0x0001, lambda h: _api()[0].TerminateProcess(h, 99) != 0)
 
 
 PRIORITY = {'idle': 0x40, 'below_normal': 0x4000, 'normal': 0x20}
@@ -237,7 +280,7 @@ PRIORITY = {'idle': 0x40, 'below_normal': 0x4000, 'normal': 0x20}
 def cap_tree(root, cores, priority='below_normal', seen=None):
     """Below-normal priority + the first `cores` logical cores for every process of the tree not capped yet."""
     import ctypes
-    k32 = ctypes.windll.kernel32
+    k32 = _api()[0]
     mask = (1 << cores) - 1
     pri = PRIORITY.get(priority, 0x4000)
     seen = set() if seen is None else seen
@@ -248,7 +291,7 @@ def cap_tree(root, cores, priority='below_normal', seen=None):
         cur, sysm = ctypes.c_size_t(), ctypes.c_size_t()
         if k32.GetProcessAffinityMask(h, ctypes.byref(cur), ctypes.byref(sysm)) and cur.value and not cur.value & ~mask:
             return True   # already inside the cap (a stage that set fewer cores itself, e.g. the talk stage): keep it
-        k32.SetProcessAffinityMask(h, ctypes.c_size_t(mask))
+        k32.SetProcessAffinityMask(h, mask)
         return True
     done = _each(new, 0x0200 | 0x0400, cap)   # PROCESS_SET_INFORMATION | PROCESS_QUERY_INFORMATION
     seen.update(new)
@@ -290,7 +333,7 @@ class Guard:
 
     def _resume(self, t):
         since, pids, _ = self.paused
-        resume_tree(pids)
+        resume_tree(pids, self.log)
         self.paused, self.over_since = None, None
         self.recover_until = time.time() + limits()['recover']   # come back at half speed, not flat out
         self.log(f"=== THERMAL resume after {time.time() - since:.0f} s: {describe(t)}; half speed for "
@@ -370,7 +413,7 @@ class Guard:
                 rest = poll * share
                 pids = suspend_tree(self.pid)
                 self.stop.wait(rest)
-                resume_tree(pids)
+                resume_tree(pids, self.log)
                 throttle_s += rest
                 if now - last_note > 120:
                     last_note = now
