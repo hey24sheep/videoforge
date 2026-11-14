@@ -63,6 +63,7 @@ SETTINGS = [
     ('VF_TALK_PIN', '0.2', 'models', 'share of RAM the talk model may pin (profile 4)'),
     ('VF_TALK_CORES', '2', 'thermal', 'logical cores the talk stage (InfiniteTalk) may use; its CPU streams weights and heats most'),
     ('VF_LTX_CORES', '2', 'thermal', 'logical cores the LTX clip stage may use (its prompt encoding spiked the CPU)'),
+    ('VF_LTX_COOL_DECODE', '1', 'thermal', '1 = the LTX stage waits for a cool machine before each video decode'),
     ('VF_TALK_COOL_DECODE', '1', 'thermal', '1 = the talk stage waits for a cool machine before each video decode'),
     ('VF_TALK_PRELOAD', '3000', 'models', 'MB of the talk model kept in VRAM'),
     ('VF_GEN_PERSIST', '1', 'worker', '0 = one-shot model processes instead of the warm worker'),

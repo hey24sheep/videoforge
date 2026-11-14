@@ -22,6 +22,37 @@ MODEL = os.environ.get('VF_LTX_MODEL', 'ltx2_25_22B_distilled')
 STEPS = int(os.environ.get('VF_LTX_STEPS', 8))
 
 
+def _cool_before_decode():
+    """Wait for a cool machine before each VAE decode (VF_LTX_COOL_DECODE=1): with the GPU busy, the decode burst took
+    the CPU sensor to 90 C within the guard's 3 s and the build was killed (2026-11-14). Patches the decoder classes,
+    so it works however WanGP imported the decode functions."""
+    if os.environ.get('VF_LTX_COOL_DECODE', '1') == '0':
+        return
+    from vf import thermal
+    patched = []
+    for mod, cls in (('models.ltx2.ltx_core.model.video_vae.video_vae', 'VideoDecoder'),
+                     ('models.ltx2.ltx_core.model.video_vae.diffusion_video_decoder', None)):
+        try:
+            m = __import__(mod, fromlist=['x'])
+        except Exception:
+            continue
+        for name in ([cls] if cls else [n for n in dir(m) if isinstance(getattr(m, n), type)]):
+            c = getattr(m, name, None)
+            f = getattr(c, 'tiled_decode', None) if c else None
+            if f is None or getattr(f, '_vf_cool', False):
+                continue
+
+            def wrap(f=f):
+                def tiled_decode(self, *a, **k):
+                    thermal.wait_cool(log=lambda s: print(s, file=sys.stderr, flush=True), what='ltx decode')
+                    return f(self, *a, **k)
+                tiled_decode._vf_cool = True
+                return tiled_decode
+            c.tiled_decode = wrap()
+            patched.append(name)
+    print(f'[ltx] decode waits for a cool machine: {patched or "no decoder found"}', file=sys.stderr, flush=True)
+
+
 def main():
     jobs = json.load(open(sys.argv[1]))
     online = '--online' in sys.argv or os.environ.get('VF_LTX_ONLINE', '1') == '1'
@@ -43,6 +74,7 @@ def main():
     cli = ([] if online else ['--offline']) + ['--attention', 'auto', '--profile', '4', '--max-ram', '20',
                                                '--perc-reserved-mem-max', '0.2', '--verbose', '0']
     session = init(root=WAN2GP, config_path=cfg, output_dir=work, cli_args=cli)
+    _cool_before_decode()
     for i, j in enumerate(jobs):
         thermal.wait_cool(log=lambda m: print(m, file=sys.stderr, flush=True), what=f'ltx clip {i + 1}')
         t0 = time.time()
