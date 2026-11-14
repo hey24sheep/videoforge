@@ -29,6 +29,7 @@ GROUPS = [
                ('script-judge', 'persona prompts + score table')]),
     ('Look after', [('status', 'running and recent jobs, stage progress, GPU'),
                     ('config', 'every VF_* setting: value, source, default; set / unset'),
+                    ('thermal', 'CPU / GPU / RAM temperatures; jobs pause at VF_TEMP_MAX (80 C)'),
                     ('doctor', 'interpreters, venvs, GPU, NVENC, ffmpeg, models, disk'),
                     ('gc', 'cache files no latest build uses (--apply: Recycle Bin)'),
                     ('formats', 'output formats'),

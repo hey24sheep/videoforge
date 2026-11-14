@@ -120,6 +120,15 @@ def cmd_run(a):
     print(f'started {jid} (runner pid {p.pid})\n  log: {log}\n  check: python tools/jobwatch.py check')
 
 
+def _vf_module(name):
+    """Load vf/<name>.py by path (no package import: the runner stays light and stdlib-only)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('vf_' + name, os.path.join(ROOT, 'vf', name + '.py'))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
 def cmd_runner(a):
     """Detached supervisor: run the job, wait, record the exit code (a killed runner leaves rc None = KILLED)."""
     path = os.path.join(JOBS, a.id + '.json')
@@ -127,6 +136,11 @@ def cmd_runner(a):
     env = dict(os.environ)
     env['PYTHONUNBUFFERED'] = '1'
     env.update(job.get('env', {}))  # was dict(..., PYTHONUNBUFFERED='1', **env): TypeError when env also set it
+    try:   # vf.config.json settings (VF_TEMP_MAX ...) for the thermal guard below; the child applies them itself
+        os.environ.update(job.get('env', {}))
+        _vf_module('config').apply()
+    except Exception:
+        pass
     with open(job['log'], 'ab') as out:
         out.write(f"\n=== jobwatch start {time.strftime('%Y-%m-%d %H:%M:%S')}: {' '.join(job['argv'])}\n".encode())
         out.flush()
@@ -134,7 +148,20 @@ def cmd_runner(a):
                              stderr=subprocess.STDOUT)
         job.update(pid=p.pid, status='running')
         _save(job)
-        rc = p.wait()
+
+        def note(s):
+            out.write(('\n' + s + '\n').encode())
+            out.flush()
+        guard = None
+        try:   # thermal guard (vf/thermal.py): suspend the whole job tree while CPU/GPU/RAM >= VF_TEMP_MAX
+            guard = _vf_module('thermal').Guard(p.pid, note).start()
+        except Exception as e:
+            note(f'=== THERMAL guard not running: {e}')
+        try:
+            rc = p.wait()
+        finally:
+            if guard:
+                guard.close()
         out.write(f"\n=== jobwatch end {time.strftime('%Y-%m-%d %H:%M:%S')} rc={rc}\n".encode())
     job = _load(path) or job
     job.update(rc=rc, ended=time.time(), status='ok' if rc == 0 else 'failed')
@@ -268,6 +295,7 @@ def cmd_restart(a):
 EVENTS = [  # (regex on NEW log lines, kind) - the first match ends `watch` so the session wakes up and acts
     (r'Traceback \(most recent call last\)', 'ERROR'),
     (r'\[talk\] ABORT|ABORT:', 'ABORT'),
+    (r'=== THERMAL', 'THERMAL'),
     (r'\bFLAG\b', 'FLAG'),
     (r'QC (error|warning)', 'QC'),
     (r'voicedir: acted|talk: \d+ shot\(s\) in|k6: generating|ai stage:|^short: ', 'MILESTONE'),

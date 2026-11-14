@@ -5,7 +5,7 @@ _a = sys.argv[1:]
 if not _a:
     from .ui import overview
     overview()
-elif _a[0] in ('status', 'config'):
+elif _a[0] in ('status', 'config', 'thermal'):
     from importlib import import_module
     sys.exit(import_module('.' + _a[0], 'vf').main(_a[1:]))
 elif _a[0] == '--version':

@@ -179,6 +179,11 @@ In a cloud session (no GPU, no D:/ models): scripts, specs, docs and `python -m 
   tell the user what is missing, re-read the files before acting.
 - Claude cannot read its own context %; never estimate it. Ask the user to run `/context`.
 
+## Thermal limit (owner, 2026-11-14): CPU, GPU and RAM must never pass 80 C
+`vf/thermal.py`: jobwatch suspends a job's process tree at VF_TEMP_MAX (80) and resumes at VF_TEMP_RESUME (70); gpu_lock
+waits for a cool machine. `vf thermal` reads the sensors. CPU = ACPI zone (reads low under load); no RAM sensor without
+LibreHardwareMonitor. Always start long jobs through jobwatch so the guard covers them.
+
 ## Long-process watchdog (user rule, 2026-11-02)
 - Any process running 30+ min gets rechecked (newest output/cache file times, GPU/VRAM, competing processes, log);
   if stuck or slow, diagnose, fix, restart. Start a 30-min background check with every long job; run builds with

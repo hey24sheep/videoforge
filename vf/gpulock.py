@@ -77,6 +77,11 @@ class gpu_lock:
         return self
 
     def _file_acquire(self):
+        try:   # a step that takes the GPU first waits until CPU/GPU/RAM are under VF_TEMP_MAX (vf/thermal.py)
+            from .thermal import wait_cool
+            wait_cool(what=self.what)
+        except ImportError:
+            pass
         os.makedirs(os.path.dirname(PATH), exist_ok=True)
         t0 = time.time()
         said = False

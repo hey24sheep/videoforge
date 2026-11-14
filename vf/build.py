@@ -252,7 +252,7 @@ def main(argv=None):
     if not argv:
         ui.overview()
         return
-    passthru = {'status': 'status', 'config': 'config', 'judge': 'judge', 'framecheck': 'framecheck',
+    passthru = {'status': 'status', 'config': 'config', 'thermal': 'thermal', 'judge': 'judge', 'framecheck': 'framecheck',
                 'script-judge': 'scriptjudge'}
     if argv[0] in passthru:   # these parse their own arguments, so `vf judge -h` shows judge's help
         from importlib import import_module
@@ -266,6 +266,7 @@ def main(argv=None):
     sub = ap.add_subparsers(dest='cmd', required=True, metavar='<command>')
     _add = sub.add_parser
     sub.add_parser = lambda *x, **k: _add(*x, formatter_class=fmt, **k)   # colour help on every subcommand
+    sub.add_parser('thermal', help='CPU / GPU / RAM temperatures and the thermal limit (vf/thermal.py)')
     st = sub.add_parser('status', help='running and recent jobs, stage progress, GPU (vf/status.py)')
     st.add_argument('rest', nargs=argparse.REMAINDER)
     cf = sub.add_parser('config', help='every VF_* setting: value, source, default; get / set / unset (vf/config.py)')

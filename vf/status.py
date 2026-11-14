@@ -46,7 +46,13 @@ def collect(hours=24, show_all=False):
                          elapsed=end - j.get('started', end), log_age_min=c['log_age_min'],
                          last=(c['last'][-1] if c['last'] else '').strip(), cause=(c['cause'] or {}).get('label'),
                          log=j['log']))
-    return dict(jobs=rows, gpu=_gpu())
+    try:
+        from .thermal import read, limits
+        temps = {k: v[0] for k, v in read().items()}
+        lim = limits()
+    except Exception:
+        temps, lim = {}, None
+    return dict(jobs=rows, gpu=_gpu(), temps=temps, temp_limit=lim)
 
 
 COLOUR = {'running': 'green', 'ok': 'dim green', 'STALLED': 'bold yellow', 'FAILED': 'bold red', 'KILLED': 'red'}
@@ -58,6 +64,9 @@ def render(d):
     if not ui.live():
         if g:
             print(f"GPU {g['name']}: {g['util']}% busy, {g['used_mb']}/{g['total_mb']} MB, {g['temp']} C")
+        if d.get('temps'):
+            print('temps: ' + ', '.join(f'{k} {v:.0f} C' for k, v in sorted(d['temps'].items()))
+                  + (f" (pause at {d['temp_limit']['max']:.0f} C)" if d.get('temp_limit') else ''))
         for r in d['jobs']:
             s = f"{r['stage']['i']}/{r['stage']['n']} {r['stage']['name']}" if r['stage'] else '-'
             print(f"[{r['status']}] {r['id']}  stage {s}  {_ago(r['elapsed'])}  {r['cause'] or r['last'][:100]}")
@@ -75,6 +84,11 @@ def render(d):
         t.add_row(f"[bold]GPU[/] {g['name']}", f"[cyan]{g['util']}%[/] busy", 'VRAM', bar,
                   f"{g['used_mb'] / 1024:.1f}/{g['total_mb'] / 1024:.1f} GB", f"{g['temp']} °C")
         parts.append(t)
+    if d.get('temps'):
+        mx = (d.get('temp_limit') or {}).get('max', 80)
+        parts.append('[bold]temps[/] ' + '   '.join(
+            f"{k} [{'bold red' if v >= mx else 'yellow' if v >= mx - 10 else 'green'}]{v:.0f} °C[/]"
+            for k, v in sorted(d['temps'].items())) + f"   [dim]pause at {mx:.0f} °C (vf thermal)[/]")
     t = Table(box=box.SIMPLE_HEAD, header_style='bold magenta')
     for c in ('job', 'status', 'stage', 'time', 'last line'):
         t.add_column(c, no_wrap=c != 'last line', overflow='fold' if c == 'last line' else 'ellipsis')

@@ -182,6 +182,18 @@ to `vf.config.json` (not committed); an environment variable wins over the file.
 | `VF_WATERMARK` | `1` | `0` = no corner mark ([please keep it](#-watermark)) |
 | `VF_ENCODER` | `auto` | `auto` = NVENC when it works, else CPU; `nvenc`; `cpu` = libx264 / libx265 |
 | `VF_GEN_PERSIST` | `1` | `0` = one-shot model processes instead of the warm worker |
+| `VF_TEMP_MAX` | `80` | °C: a job pauses when the CPU, GPU or RAM sensor reaches this ([thermal guard](#thermal-guard)) |
+| `VF_TEMP_RESUME` | `70` | °C: a paused job resumes when every sensor is at or below this |
+| `VF_THERMAL` | `1` | `0` = no thermal guard |
+
+### Thermal guard
+`vf thermal` shows the CPU, GPU and RAM temperatures. Every job started with `tools/jobwatch.py run` is watched: when a
+sensor reaches `VF_TEMP_MAX` (80 °C) the job's whole process tree is suspended (`=== THERMAL pause` in the log) and
+resumes at `VF_TEMP_RESUME` (70 °C). A step that takes the GPU lock also waits until the machine is cool, so runs
+outside jobwatch are covered between steps. Without admin rights Windows exposes the GPU (nvidia-smi) and the ACPI
+thermal zone, which reads lower than the CPU cores under load, and no RAM sensor. For the exact core and DIMM
+temperatures run [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) with its web
+server on (port 8085): `vf thermal` uses it when it answers (`VF_TEMP_LHM`).
 
 ---
 
