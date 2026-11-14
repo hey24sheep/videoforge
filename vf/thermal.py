@@ -10,7 +10,8 @@ Layers (tools/jobwatch.py runs every job under `Guard`; settings in `vf config`,
   2. cool start    a job starts only when every sensor is at or below VF_TEMP_RESUME.
   3. soft limit    from VF_TEMP_SOFT (72 C) the tree is duty-cycled: suspended for a rest that grows from 0 to 100 %
                    of each poll period as the temperature climbs to the hard limit. Logged as `[thermal] throttle`.
-  4. hard limit    at VF_TEMP_MAX (80 C) the tree is suspended until every sensor is at or below VF_TEMP_RESUME (70 C):
+  4. hard limit    reads every VF_TEMP_FAST_POLL s (2) once within 6 C of the soft limit, and pauses EARLY when the
+                   rise rate would pass VF_TEMP_MAX before the next read. At VF_TEMP_MAX (80 C) the tree is suspended until every sensor is at or below VF_TEMP_RESUME (70 C):
                    `=== THERMAL pause` / `=== THERMAL resume` (a jobwatch watch event).
   5. emergency     at VF_TEMP_CRIT (88 C), or over VF_TEMP_MAX for VF_TEMP_HOT_MIN minutes while paused, the tree is
                    killed: `=== THERMAL KILL` (jobwatch reports FAILED with the cause; builds are cached, rerun when cool).
@@ -284,6 +285,7 @@ class Guard:
 
     def _loop(self):
         last_note = throttle_s = 0.0
+        prev = None   # (time, hottest) of the last read: the rise rate predicts the next poll
         while not self.stop.is_set():
             L = limits()
             try:
@@ -304,6 +306,11 @@ class Guard:
                 self.stop.wait(L['poll'])
                 continue
             self.blind = 0
+            # warm: read every VF_TEMP_FAST_POLL s (a 10 s poll let a CPU spike pass 80 C between two reads)
+            fast = hi >= L['soft'] - 6
+            poll = min(L['poll'], float(os.environ.get('VF_TEMP_FAST_POLL', 2))) if fast else L['poll']
+            rate = (hi - prev[1]) / max(0.5, now - prev[0]) if prev else 0.0
+            prev = (now, hi)
             # 5. emergency kill
             if hi >= L['crit'] or (self.over_since and now - self.over_since > L['hot_min'] * 60):
                 why = (f"{describe(t)} >= {L['crit']:.0f} C" if hi >= L['crit'] else
@@ -324,19 +331,24 @@ class Guard:
                 elif now - last_note > 300:
                     last_note = now
                     self.log(f"=== THERMAL still paused ({now - self.paused[0]:.0f} s): {describe(t)}")
-                self.stop.wait(L['poll'])
+                self.stop.wait(poll)
                 continue
-            # 4. hard limit
+            # 4. hard limit, and early when the rise rate would reach it before the next read (+1 C margin)
             if hi >= L['max']:
                 self.over_since = now
                 self._pause(f"{', '.join(f'{k} {c:.0f} C' for k, c in hot(t, L['max']))} >= {L['max']:.0f} C "
                             f"({describe(t)}), resume at {L['resume']:.0f} C")
-                self.stop.wait(L['poll'])
+                self.stop.wait(poll)
+                continue
+            if hi >= L['soft'] and rate > 0 and hi + rate * (poll + 1.5) >= L['max'] - 1:
+                self._pause(f"rising {rate:.1f} C/s at {describe(t)}: would pass {L['max']:.0f} C before the next "
+                            f"read; resume at {L['resume']:.0f} C")
+                self.stop.wait(poll)
                 continue
             # 3. soft limit: duty cycle, rest share grows from 0 to 1 between soft and max
             if hi >= L['soft']:
                 share = min(1.0, (hi - L['soft']) / max(1.0, L['max'] - L['soft']) + 0.2)
-                rest = L['poll'] * share
+                rest = poll * share
                 pids = suspend_tree(self.pid)
                 self.stop.wait(rest)
                 resume_tree(pids)
@@ -345,9 +357,9 @@ class Guard:
                     last_note = now
                     self.log(f"[thermal] throttle: {describe(t)}, resting {share * 100:.0f} % "
                              f"({throttle_s:.0f} s of rest so far)")
-                self.stop.wait(L['poll'] - rest)
+                self.stop.wait(max(0.0, poll - rest))
                 continue
-            self.stop.wait(L['poll'])
+            self.stop.wait(poll)
 
     def close(self):
         self.stop.set()

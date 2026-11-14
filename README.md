@@ -193,7 +193,8 @@ layers, tuned so a laptop in a 45 °C room stays under 80 °C:
 1. **Load caps**: the whole job (every child process) runs at below-normal priority on half the CPU cores (`VF_CPU_CORES`).
 2. **Cool start**: a job starts only when every sensor is at or below `VF_TEMP_RESUME` (70 °C).
 3. **Throttle**: from `VF_TEMP_SOFT` (72 °C) the job gets short rests, longer as it nears the limit.
-4. **Pause**: at `VF_TEMP_MAX` (80 °C) the job is suspended until every sensor is back at 70 °C (`=== THERMAL pause`).
+4. **Pause**: reads every 2 s once warm and pauses early when the rise rate would pass 80 °C before the next read;
+   at `VF_TEMP_MAX` (80 °C) the job is suspended until every sensor is back at 70 °C (`=== THERMAL pause`).
 5. **Emergency stop**: at `VF_TEMP_CRIT` (88 °C), or 20 min over 80 °C while paused, the job is killed
    (`=== THERMAL KILL`; cached work survives, rerun when cool).
 6. **Fail closed**: no readable sensor for 3 polls pauses the job; a guard that cannot load means the job does not start.
