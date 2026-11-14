@@ -1,6 +1,7 @@
 # videoforge changelog
 
 ## Unreleased
+- Talk stage runs on 2 cores (`VF_TALK_CORES`) and waits for a cool machine before each video decode (`VF_TALK_COOL_DECODE`); the thermal guard keeps a narrower core mask a stage set itself.
 - `vf cut` writes the archive automatically after a passed release (`VF_ARCHIVE=0` to skip). `vf config export` /
   `vf config import` save and restore every setting.
 - `vf archive <episode.yaml>`: keeps the kept voice take of every line, voice refs, every shot's keyframe, cast refs and

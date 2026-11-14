@@ -197,6 +197,50 @@ def prep_audio(src, dst, seconds):
     return dst
 
 
+def talk_cores(n):
+    """Run this process on the first `n` logical cores with that many math threads (VF_TALK_CORES, default 2). The talk
+    stage streams 14B weights through the CPU on every step: on 4 cores it reached 80-82 C each step and 89 C at decode
+    (2026-11-14). The jobwatch thermal guard keeps a narrower mask it finds."""
+    try:
+        n = max(1, min(os.cpu_count() or 2, int(n)))
+    except ValueError:
+        return
+    for k in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+        os.environ[k] = str(n)
+    if os.name == "nt":
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        k32.GetCurrentProcess.restype = ctypes.c_void_p   # pseudo handle -1: a 32-bit int return truncates it
+        if not k32.SetProcessAffinityMask(ctypes.c_void_p(k32.GetCurrentProcess()), ctypes.c_size_t((1 << n) - 1)):
+            print(f"[talk] CPU cap NOT set (error {k32.GetLastError()})", flush=True)
+            return
+    print(f"[talk] CPU: {n} of {os.cpu_count()} cores (VF_TALK_CORES)", flush=True)
+
+
+def cool_before_decode():
+    """Wait for a cool machine before every video decode (VF_TALK_COOL_DECODE=1): the decode right after the last step
+    spiked the CPU to 89 C and the guard killed the take (2026-11-14). Blocks inside the generation thread, so the
+    decode itself waits."""
+    if os.environ.get("VF_TALK_COOL_DECODE", "1") == "0":
+        return
+    try:
+        sys.path.append(r"D:\claude_work\videoforge")
+        from vf.thermal import wait_cool
+        from models.wan.modules import vae as wan_vae
+    except Exception as e:
+        print(f"[talk] cool-before-decode not set: {e}", flush=True)
+        return
+    orig = wan_vae.WanVAE.decode_to_cpu_uint8
+
+    def decode(self, *a, **k):
+        waited = wait_cool(log=lambda s: print(s, flush=True), what="talk video decode")
+        if waited:
+            time.sleep(5)   # let the reading settle below the resume level before the burst
+        return orig(self, *a, **k)
+    wan_vae.WanVAE.decode_to_cpu_uint8 = decode
+    print("[talk] decode waits for a cool machine (VF_TALK_COOL_DECODE)", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--image")
@@ -253,7 +297,9 @@ def main():
     ws_cap = args.ws_cap or 9.0
     print(f"[talk] RAM: {free_gb:.1f} GB available; working-set cap {ws_cap:.1f} GB: "
           f"{'set' if cap_working_set(ws_cap) else 'NOT set'}")
+    talk_cores(os.environ.get("VF_TALK_CORES", "2"))
     import torch
+    torch.set_num_threads(max(1, int(os.environ.get("OMP_NUM_THREADS", "2"))))
     if not torch.cuda.is_available():
         sys.exit("CUDA not available")
     torch.cuda.set_per_process_memory_fraction(VRAM_FRACTION, 0)
@@ -263,6 +309,7 @@ def main():
     sys.path.insert(0, str(WAN2GP))
     os.chdir(WAN2GP)
     from shared.api import init
+    cool_before_decode()
 
     sys.path.append(r"D:\claude_work\videoforge")
     from vf.gpulock import gpu_lock  # cross-process lock shared with the vf pipeline

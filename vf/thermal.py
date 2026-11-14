@@ -245,6 +245,9 @@ def cap_tree(root, cores, priority='below_normal', seen=None):
 
     def cap(h):
         k32.SetPriorityClass(h, pri)
+        cur, sysm = ctypes.c_size_t(), ctypes.c_size_t()
+        if k32.GetProcessAffinityMask(h, ctypes.byref(cur), ctypes.byref(sysm)) and cur.value and not cur.value & ~mask:
+            return True   # already inside the cap (a stage that set fewer cores itself, e.g. the talk stage): keep it
         k32.SetProcessAffinityMask(h, ctypes.c_size_t(mask))
         return True
     done = _each(new, 0x0200 | 0x0400, cap)   # PROCESS_SET_INFORMATION | PROCESS_QUERY_INFORMATION
