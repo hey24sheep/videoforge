@@ -35,8 +35,8 @@ Licence rule: open weights usable commercially only (Apache-2.0, MIT, or a licen
 | 2026-11-14 | NVFP4 / Nunchaku FP4 | Rejected | Needs an RTX 50 card (Blackwell FP4); Ada has none. |
 | 2026-11-14 | Nunchaku / SVDQuant INT4 for Wan | Rejected | No Wan or InfiniteTalk model found. |
 | 2026-11-14 | TalkVerse 5B (Wan2.2-TI2V-5B LoRA, CVPR 2026) | Rejected | Snap Inc. non-commercial licence. |
-| 2026-11-14 | StableAvatar (Wan2.1-1.3B based) | Candidate | Hugging Face API: licence MIT; 3.5 GB transformer + 3.1 GB Wan2.1-Fun-1.3B base; supports 480x832. Fits the card whole: no weight streaming, far less GPU work. Quality vs InfiniteTalk 14B unknown: needs a blind A/B on real talk shots. |
-| 2026-11-14 | HuMo 1.7B (ByteDance, audio + image + text) | Candidate | Hugging Face API: licence Apache-2.0; HuMo-1.7B/ema.pth 7.0 GB (fp32, about 3.5 GB in bf16). Same reasoning as StableAvatar. |
+| 2026-11-14 | StableAvatar (Wan2.1-1.3B based, MIT) | Rejected (tested) | Measured on this laptop, 480x832, 81 frames, 25 steps: does not fit 8 GB as shipped (its 3 guidance passes run as one batch: OOM); with the passes run one at a time it ran ~100-140 s per step, so ~45-60 min per take against ~7-11 min for InfiniteTalk 14B (4 steps), and heated the machine to CPU 87 C / GPU 74 C with repeated guard pauses. Stopped at step 12 of 25. Needs no weight streaming, but 25-50 undistilled steps x 3 passes is far more compute than 4 distilled steps of the 14B. Quality not judged (512x512 "square" weights were used; the 480x832 "rec-vec" set was not downloaded). |
+| 2026-11-14 | HuMo 1.7B (ByteDance, Apache-2.0) | Rejected (not run) | Same class as StableAvatar: Wan 1.3B base, 50 steps, two guidance scales (3 passes); authors quote 8 min per 480p clip on a 32 GB GPU; torchrun + FSDP setup; generates from a reference face instead of animating our keyframe. StableAvatar's measured 6x slowdown applies. |
 | 2026-11-14 | OmniAvatar 1.3B | Rejected | Hugging Face repo states no licence (no licence = no permission to use). |
 | 2026-11-14 | DirectStorage -> D3D12 buffer -> CUDA external memory (Windows answer to GPUDirect Storage) | Rejected for the talk stage | Real on Windows: described in the fastsafetensors docs, and a community DLL reports 4.1x faster LLM loads (self-reported). But it speeds up loading from disk, and the talk step is compute-bound: about 12 GB copied RAM -> GPU per step is about 1-2 s of a 105 s step (CLAUDE.md: ~81 s/step of pure compute). It could only cut the first model load (about 90 s). |
 | 2026-11-14 | Zero-copy mapped host memory (cudaHostRegister on mmap'd weights) | Rejected | The GPU reads weights over PCIe at every use; a 2026 preprint measured llama.cpp-style mapped weights over PCIe 146.9 -> 3.79 tok/s. Staging into VRAM (what WanGP does) is the right policy on a discrete GPU. |
@@ -48,6 +48,11 @@ Licence rule: open weights usable commercially only (Apache-2.0, MIT, or a licen
 | 2026-11-14 | Persistent talk worker (load the 14B once per session) | Open | Saves the model load (about 90 s) per build, not per-step heat. |
 
 ## Key fact
+
+Small undistilled models are not faster: a 1.3B model at 25-50 steps x 3 guidance passes does more GPU work than the
+14B at 4 distilled steps with 1-2 passes (measured: StableAvatar about 6x slower). A small model only wins with a
+few-step distillation (none released for these avatar models as of 2026-11-14).
+
 
 The talk step is compute-bound: loading tricks (GPUDirect, DirectStorage, pinning, Q4) cut copying, which is about 1-2 s
 of each 105 s step. Only less compute helps per step: a smaller model, fewer frames, fewer steps or sparse attention.
