@@ -35,10 +35,22 @@ Licence rule: open weights usable commercially only (Apache-2.0, MIT, or a licen
 | 2026-11-14 | NVFP4 / Nunchaku FP4 | Rejected | Needs an RTX 50 card (Blackwell FP4); Ada has none. |
 | 2026-11-14 | Nunchaku / SVDQuant INT4 for Wan | Rejected | No Wan or InfiniteTalk model found. |
 | 2026-11-14 | TalkVerse 5B (Wan2.2-TI2V-5B LoRA, CVPR 2026) | Rejected | Snap Inc. non-commercial licence. |
-| 2026-11-14 | StableAvatar (Wan2.1-1.3B based) | Candidate | Hugging Face card says MIT; supports 480x832. Fits the card whole: no weight streaming, far less GPU work. Quality vs InfiniteTalk 14B unknown: needs a blind A/B on real talk shots. Licence file in the GitHub repo not yet read. |
-| 2026-11-14 | HuMo 1.7B (ByteDance, audio + image + text) | Candidate | Listed as Apache-2.0 by several sites; model card not yet read. Same reasoning as StableAvatar. |
-| 2026-11-14 | OmniAvatar 1.3B | Candidate | On Hugging Face; licence not checked yet. |
+| 2026-11-14 | StableAvatar (Wan2.1-1.3B based) | Candidate | Hugging Face API: licence MIT; 3.5 GB transformer + 3.1 GB Wan2.1-Fun-1.3B base; supports 480x832. Fits the card whole: no weight streaming, far less GPU work. Quality vs InfiniteTalk 14B unknown: needs a blind A/B on real talk shots. |
+| 2026-11-14 | HuMo 1.7B (ByteDance, audio + image + text) | Candidate | Hugging Face API: licence Apache-2.0; HuMo-1.7B/ema.pth 7.0 GB (fp32, about 3.5 GB in bf16). Same reasoning as StableAvatar. |
+| 2026-11-14 | OmniAvatar 1.3B | Rejected | Hugging Face repo states no licence (no licence = no permission to use). |
+| 2026-11-14 | DirectStorage -> D3D12 buffer -> CUDA external memory (Windows answer to GPUDirect Storage) | Rejected for the talk stage | Real on Windows: described in the fastsafetensors docs, and a community DLL reports 4.1x faster LLM loads (self-reported). But it speeds up loading from disk, and the talk step is compute-bound: about 12 GB copied RAM -> GPU per step is about 1-2 s of a 105 s step (CLAUDE.md: ~81 s/step of pure compute). It could only cut the first model load (about 90 s). |
+| 2026-11-14 | Zero-copy mapped host memory (cudaHostRegister on mmap'd weights) | Rejected | The GPU reads weights over PCIe at every use; a 2026 preprint measured llama.cpp-style mapped weights over PCIe 146.9 -> 3.79 tok/s. Staging into VRAM (what WanGP does) is the right policy on a discrete GPU. |
+| 2026-11-14 | LongCat-Video-Avatar 1.5 (MIT, in WanGP) | Rejected | About 64 GB of bf16 weights (larger than InfiniteTalk) and 8 steps against our 4: slower here. |
+| 2026-11-14 | Motar (arXiv 2609.10317, 77M motion + 1.7B renderer, 15 fps on H200) | Watch | No code or weights released. |
+| 2026-11-14 | Avatar-Forever (arXiv 2608.12107, LTX-2.3 22B, 4 steps, 27 fps on H100) | Rejected | 22B base: bigger than what we run; weights licence not stated. |
+| 2026-11-14 | DynaForcing (arXiv 2608.17707, Wan2.2-S2V 14B) | Rejected | 14B, no release. |
+| 2026-11-14 | Hallo-Live (arXiv 2604.23632, Ovi-based, 20 fps on 2x H200) | Watch | Code and models said to be public (github fudan-generative-vision/Hallo-Live); licence and size not checked; generates its own audio track (Ovi), not driven by our voice takes. |
 | 2026-11-14 | Persistent talk worker (load the 14B once per session) | Open | Saves the model load (about 90 s) per build, not per-step heat. |
+
+## Key fact
+
+The talk step is compute-bound: loading tricks (GPUDirect, DirectStorage, pinning, Q4) cut copying, which is about 1-2 s
+of each 105 s step. Only less compute helps per step: a smaller model, fewer frames, fewer steps or sparse attention.
 
 ## Next test (when chosen)
 
@@ -58,3 +70,9 @@ temperature, guard pauses; plus a blind Opus frame review. `tools/talk_bench.py`
 - TalkVerse: https://arxiv.org/abs/2512.14938
 - Q3 14B GGUF on 8 GB, same speed (one user report): https://www.reddit.com/r/StableDiffusion/comments/1koefcg/new_wan21vace14bggufs/
 - Wan 2.2 GGUF guide (Q4 vs Q5 faces): https://wan27.org/zh/blog/wan-2-2-gguf-guide
+- fastsafetensors (Windows DirectStorage design): https://github.com/foundation-model-stack/fastsafetensors/blob/main/docs/overview.md
+- DirectStorage + CUDA LLM loader (community, self-reported): https://news.ycombinator.com/item?id=46949763
+- File-backed weights over PCIe (preprint): https://arxiv.org/abs/2608.12114
+- LongCat-Video-Avatar: https://huggingface.co/meituan-longcat/LongCat-Video-Avatar
+- Motar: https://arxiv.org/abs/2609.10317 ; Avatar-Forever: https://arxiv.org/abs/2608.12107 ;
+  DynaForcing: https://arxiv.org/abs/2608.17707 ; Hallo-Live: https://arxiv.org/abs/2604.23632
