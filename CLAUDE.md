@@ -179,6 +179,10 @@ In a cloud session (no GPU, no D:/ models): scripts, specs, docs and `python -m 
   tell the user what is missing, re-read the files before acting.
 - Claude cannot read its own context %; never estimate it. Ask the user to run `/context`.
 
+## Archive every finished episode (owner, 2026-11-14)
+`vf archive <episode.yaml>` after the final build: voice takes, voice refs, keyframes, cast refs and lock.json go to
+<episode>/archive/ and are committed with the episode (private series: in their own repo).
+
 ## Never push junk (owner, 2026-11-14)
 Before every push: `python tools/junkcheck.py` (also the pre-push hook in both repos; `--install` sets it up on a new
 clone). Junk = logs, review/critic files, ep*/out build output, build snapshots, test files, local settings. Untrack with

@@ -1,6 +1,9 @@
 # videoforge changelog
 
 ## Unreleased
+- `vf archive <episode.yaml>`: keeps the kept voice take of every line, voice refs, every shot's keyframe, cast refs and
+  lock.json (voice settings, seeds, prompts, kept takes, VF_* settings, videoforge commit) in `<episode>/archive/`, so a
+  lost render can be remade with the same people and voices. Every build now writes `out/shots.json` for it.
 - `tools/junkcheck.py`: blocks a push that adds junk (logs, review sheets, critic files, episode build output, build
   snapshots, test files, local settings, media over 25 MB outside allowed folders). `--install` makes it the pre-push hook.
 - Thermal guard (`vf/thermal.py`), safe for a 45 °C room: jobs run at below-normal priority on half the cores, start

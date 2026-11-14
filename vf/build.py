@@ -163,6 +163,11 @@ def _build(path, formats, preview=False, force=False):
         os.makedirs(os.path.join(spec['root'], 'out'), exist_ok=True)
         with open(os.path.join(spec['root'], 'out', 'clip_qc.json'), 'w', encoding='utf-8') as f:
             json.dump(takes, f, indent=1, default=str)
+        # what made each shot (still, seeds, prompts, kept take): `vf archive` keeps it with the episode in git
+        shots = {s['id']: {k: v for k, v in s['gen'].items() if not k.startswith('_') or k in ('_image', '_last')}
+                 for s in spec['shots'] if s.get('gen')}
+        with open(os.path.join(spec['root'], 'out', 'shots.json'), 'w', encoding='utf-8') as f:
+            json.dump(dict(shots=shots, takes=takes), f, indent=1, default=str)
     # the timeline as rendered (vf/talk.py moves cut points): `vf check` reads it instead of the yaml durations
     os.makedirs(os.path.join(spec['root'], 'out'), exist_ok=True)
     with open(os.path.join(spec['root'], 'out', 'timeline.json'), 'w', encoding='utf-8') as f:
@@ -252,7 +257,7 @@ def main(argv=None):
     if not argv:
         ui.overview()
         return
-    passthru = {'status': 'status', 'config': 'config', 'thermal': 'thermal', 'judge': 'judge', 'framecheck': 'framecheck',
+    passthru = {'status': 'status', 'config': 'config', 'thermal': 'thermal', 'archive': 'archive', 'judge': 'judge', 'framecheck': 'framecheck',
                 'script-judge': 'scriptjudge'}
     if argv[0] in passthru:   # these parse their own arguments, so `vf judge -h` shows judge's help
         from importlib import import_module
@@ -266,6 +271,7 @@ def main(argv=None):
     sub = ap.add_subparsers(dest='cmd', required=True, metavar='<command>')
     _add = sub.add_parser
     sub.add_parser = lambda *x, **k: _add(*x, formatter_class=fmt, **k)   # colour help on every subcommand
+    sub.add_parser('archive', help='keep voice takes, keyframes, cast refs and settings of an episode (vf/archive.py)')
     sub.add_parser('thermal', help='CPU / GPU / RAM temperatures and the thermal limit (vf/thermal.py)')
     st = sub.add_parser('status', help='running and recent jobs, stage progress, GPU (vf/status.py)')
     st.add_argument('rest', nargs=argparse.REMAINDER)
