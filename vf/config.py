@@ -50,6 +50,8 @@ SETTINGS = [
     ('VF_TEMP_BLIND', '3', 'thermal', 'polls with no readable sensor before a job is paused (fail closed)'),
     ('VF_CPU_CORES', 'quarter', 'thermal', 'logical cores a job may use (default a quarter, at least 2)'),
     ('VF_TEMP_RECOVER', '60', 'thermal', 'seconds at half speed after a thermal pause'),
+    ('VF_TEMP_HOLD', '10', 'thermal', 'seconds a reading must stay at/above a limit before the guard acts'),
+    ('VF_TEMP_CRIT_HOLD', '3', 'thermal', 'seconds at/above VF_TEMP_CRIT before the emergency stop'),
     ('VF_JOB_PRIORITY', 'below_normal', 'thermal', 'job process priority: below_normal, idle or normal'),
     ('VF_TEMP_POLL', '10', 'thermal', 'seconds between temperature reads while cool'),
     ('VF_TEMP_FAST_POLL', '2', 'thermal', 'seconds between reads once warm (rise rate triggers an early pause)'),

@@ -9,10 +9,12 @@ Layers (tools/jobwatch.py runs every job under `Guard`; settings in `vf config`,
                    quarter: GPU jobs only feed the card; half let one talk run spike the CPU 69 -> 88 C in 2 s), and the
                    runner sets OMP/MKL/torch thread counts to match, so the CPU never runs flat out. Re-applied every poll, so new children get it too.
   2. cool start    a job starts only when every sensor is at or below VF_TEMP_RESUME.
+  (hold) every limit acts only after the reading stays at or above it for VF_TEMP_HOLD s in a row (10; the emergency
+                   stop VF_TEMP_CRIT_HOLD, 3): the ACPI zone jumps 15 C for a second or two and settles again.
   3. soft limit    from VF_TEMP_SOFT (72 C) the tree is duty-cycled: suspended for a rest that grows from 0 to 100 %
                    of each poll period as the temperature climbs to the hard limit. Logged as `[thermal] throttle`.
-  4. hard limit    reads every VF_TEMP_FAST_POLL s (2) once within 6 C of the soft limit, and pauses EARLY when the
-                   rise rate would pass VF_TEMP_MAX before the next read. At VF_TEMP_MAX (80 C) the tree is suspended until every sensor is at or below VF_TEMP_RESUME (70 C):
+  4. hard limit    reads every VF_TEMP_FAST_POLL s (2) once within 6 C of the soft limit. At VF_TEMP_MAX (80 C) the
+                   tree is suspended until every sensor is at or below VF_TEMP_RESUME (70 C):
                    `=== THERMAL pause` / `=== THERMAL resume` (a jobwatch watch event).
                    After a pause the job runs at half speed for VF_TEMP_RECOVER s (60) before full speed.
   5. emergency     at VF_TEMP_CRIT (88 C), or over VF_TEMP_MAX for VF_TEMP_HOT_MIN minutes while paused, the tree is
@@ -47,6 +49,7 @@ def limits():
                 cpu_offset=float(e('VF_TEMP_CPU_OFFSET', 8)),
                 cores=max(2, min(cores, int(e('VF_CPU_CORES', 0)) or cores // 4)),
                 recover=float(e('VF_TEMP_RECOVER', 60)),
+                hold=max(0.0, float(e('VF_TEMP_HOLD', 10))), crit_hold=max(0.0, float(e('VF_TEMP_CRIT_HOLD', 3))),
                 priority=e('VF_JOB_PRIORITY', 'below_normal'))
 
 
@@ -269,6 +272,7 @@ class Guard:
             try:
                 cap_tree(self.pid, L['cores'], L['priority'], self.capped)
                 self.log(f"[thermal] guard on: {L['cores']} of {os.cpu_count()} cores, {L['priority']} priority; "
+                         f"acts after {L['hold']:.0f} s high (critical {L['crit_hold']:.0f} s); "
                          f"throttle from {L['soft']:.0f} C, pause at {L['max']:.0f} C, resume at {L['resume']:.0f} C, "
                          f"kill at {L['crit']:.0f} C or {L['hot_min']:.0f} min over {L['max']:.0f} C")
             except Exception as e:
@@ -291,7 +295,15 @@ class Guard:
 
     def _loop(self):
         last_note = throttle_s = 0.0
-        prev = None   # (time, hottest) of the last read: the rise rate predicts the next poll
+        since = {}    # level -> first time of the current unbroken run at or above it (spikes shorter than the hold
+                      # are ignored: the ACPI zone jumps 15 C for a second or two)
+
+        def held(level, secs, hi, now):
+            if hi < level:
+                since.pop(level, None)
+                return False
+            since.setdefault(level, now)
+            return now - since[level] >= secs
         while not self.stop.is_set():
             L = limits()
             try:
@@ -315,10 +327,11 @@ class Guard:
             # warm: read every VF_TEMP_FAST_POLL s (a 10 s poll let a CPU spike pass 80 C between two reads)
             fast = hi >= L['soft'] - 6
             poll = min(L['poll'], float(os.environ.get('VF_TEMP_FAST_POLL', 2))) if fast else L['poll']
-            rate = (hi - prev[1]) / max(0.5, now - prev[0]) if prev else 0.0
-            prev = (now, hi)
-            # 5. emergency kill
-            if hi >= L['crit'] or (self.over_since and now - self.over_since > L['hot_min'] * 60):
+            crit_held = held(L['crit'], L['crit_hold'], hi, now)
+            max_held = held(L['max'], L['hold'], hi, now)
+            soft_held = held(L['soft'], L['hold'], hi, now)
+            # 5. emergency kill (crit for VF_TEMP_CRIT_HOLD s, or over the limit for VF_TEMP_HOT_MIN while paused)
+            if crit_held or (self.over_since and now - self.over_since > L['hot_min'] * 60):
                 why = (f"{describe(t)} >= {L['crit']:.0f} C" if hi >= L['crit'] else
                        f"over {L['max']:.0f} C for {(now - self.over_since) / 60:.1f} min while paused ({describe(t)})")
                 if self.paused:
@@ -339,21 +352,16 @@ class Guard:
                     self.log(f"=== THERMAL still paused ({now - self.paused[0]:.0f} s): {describe(t)}")
                 self.stop.wait(poll)
                 continue
-            # 4. hard limit, and early when the rise rate would reach it before the next read (+1 C margin)
-            if hi >= L['max']:
+            # 4. hard limit: at or above VF_TEMP_MAX for VF_TEMP_HOLD s in a row
+            if max_held:
                 self.over_since = now
-                self._pause(f"{', '.join(f'{k} {c:.0f} C' for k, c in hot(t, L['max']))} >= {L['max']:.0f} C "
-                            f"({describe(t)}), resume at {L['resume']:.0f} C")
-                self.stop.wait(poll)
-                continue
-            if hi >= L['soft'] and rate > 0 and hi + rate * (poll + 1.5) >= L['max'] - 1:
-                self._pause(f"rising {rate:.1f} C/s at {describe(t)}: would pass {L['max']:.0f} C before the next "
-                            f"read; resume at {L['resume']:.0f} C")
+                self._pause(f"{', '.join(f'{k} {c:.0f} C' for k, c in hot(t, L['max']))} >= {L['max']:.0f} C for "
+                            f"{now - since[L['max']]:.0f} s ({describe(t)}), resume at {L['resume']:.0f} C")
                 self.stop.wait(poll)
                 continue
             # 3. soft limit: duty cycle, rest share grows from 0 to 1 between soft and max
             recovering = now < self.recover_until
-            if hi >= L['soft'] or recovering:
+            if soft_held or recovering:
                 share = min(1.0, max(0.5 if recovering else 0.0,
                                      (hi - L['soft']) / max(1.0, L['max'] - L['soft']) + 0.2))
                 rest = poll * share
