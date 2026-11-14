@@ -191,14 +191,36 @@ def _tree(root):
             ok = k32.Process32Next(snap, ctypes.byref(e))
     finally:
         k32.CloseHandle(snap)
+    # Windows reuses pids and keeps a dead parent's pid in its children's records: a new process can get the pid an
+    # unrelated older process names as its parent (2026-11-14: the guard counted its own jobwatch runner as a child
+    # and suspended itself, freezing the whole job). A real child starts after its parent, and never is this process.
+    me = os.getpid()
     out, todo = [], [root]
     while todo:
         p = todo.pop()
-        if p in out:
+        if p in out or p == me:
             continue
         out.append(p)
-        todo.extend(kids.get(p, []))
+        born = _born(p)
+        todo.extend(c for c in kids.get(p, []) if born is None or (_born(c) or 0) >= born)
     return out
+
+
+def _born(pid):
+    """Process creation time (100 ns ticks), or None when unreadable."""
+    import ctypes
+    from ctypes import wintypes
+    k32 = _api()[0]
+    h = k32.OpenProcess(0x1000, False, int(pid))
+    if not h:
+        return None
+    try:
+        t = [wintypes.FILETIME() for _ in range(4)]
+        if not k32.GetProcessTimes(h, *[ctypes.byref(x) for x in t]):
+            return None
+        return (t[0].dwHighDateTime << 32) | t[0].dwLowDateTime
+    finally:
+        k32.CloseHandle(h)
 
 
 _API = None
@@ -216,6 +238,7 @@ def _api():
         k32.OpenProcess.restype = wintypes.HANDLE
         k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
         k32.CloseHandle.argtypes = [wintypes.HANDLE]
+        k32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
         k32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
         k32.SetPriorityClass.argtypes = [wintypes.HANDLE, wintypes.DWORD]
         k32.SetProcessAffinityMask.argtypes = [wintypes.HANDLE, ctypes.c_size_t]

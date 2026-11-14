@@ -1,6 +1,7 @@
 # videoforge changelog
 
 ## Unreleased
+- Thermal guard: the job tree skips the guard's own process and any "child" older than its parent (Windows reuses pids), so a pause can no longer suspend the guard and freeze the job.
 - Thermal guard: Windows handle calls use 64-bit types (a truncated handle could fail a resume and leave a job suspended with the GPU idle); a failed resume is retried and logged.
 - Talk stage runs on 2 cores (`VF_TALK_CORES`) and waits for a cool machine before each video decode (`VF_TALK_COOL_DECODE`); the thermal guard keeps a narrower core mask a stage set itself.
 - `vf cut` writes the archive automatically after a passed release (`VF_ARCHIVE=0` to skip). `vf config export` /
